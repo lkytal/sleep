@@ -14,7 +14,9 @@
   <nav id="main-nav">
     <div class="nav-brand"><span class="nav-icon">🌙</span><span class="nav-title">睡眠追踪器</span></div>
     <div class="nav-tabs">
-      <button id="nav-record" class="nav-tab active" onclick="Record.open()">+ 新记录</button>
+      <button id="nav-dashboard" class="nav-tab active" onclick="App.showPage('dashboard')">📊 概览</button>
+      <button id="nav-analysis" class="nav-tab" onclick="App.showPage('analysis')">🔬 分析</button>
+      <button id="nav-record" class="nav-tab" onclick="Record.open()">+ 新记录</button>
     </div>
     <div class="nav-actions">
       <button id="btn-pick-file" class="nav-btn" onclick="Data.pickFile()">📂 选择文件</button>
@@ -36,6 +38,20 @@
       <div class="chart-container"><canvas id="sleep-chart"></canvas></div>
       <div class="chart-legend" id="chart-legend"></div>
       <div class="recent-records" id="recent-records"></div>
+    </section>
+    <section id="page-analysis" class="page">
+      <div class="dashboard-header">
+        <h1>🔬 药物回归分析</h1>
+      </div>
+      <p class="analysis-desc">使用 <strong>有序混合效应模型</strong>（累积Logit / 比例优势模型 + 星期随机截距）。将每种药物的 <strong>是否服用</strong>（0/1）和 <strong>服用时间偏移</strong>（相对平均时间，小时）作为固定效应，以 <strong>星期</strong> 作为随机截距分组，对有序的 <strong>睡眠评分</strong> 进行建模。系数为log-odds，OR &gt; 1 表示该特征与更高评分等级相关。</p>
+      <div class="analysis-stats" id="analysis-stats"></div>
+      <div class="chart-container analysis-chart-container"><canvas id="analysis-chart"></canvas></div>
+      <div class="analysis-legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#55efc4"></span>是否服用 (正向)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#e17055"></span>是否服用 (负向)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#74b9ff"></span>时间偏移 (正向)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#fdcb6e"></span>时间偏移 (负向)</div>
+      </div>
     </section>
   </main>
   <!-- Record Modal -->
@@ -107,6 +123,7 @@
   <script src="js/data.js"></script>
   <script src="js/record.js"></script>
   <script src="js/dashboard.js"></script>
+  <script src="js/analysis.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
