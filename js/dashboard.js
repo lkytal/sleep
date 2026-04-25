@@ -1,7 +1,7 @@
 /* dashboard.js — Dashboard: mixed bar/line chart + recent records list */
 const Dashboard = (() => {
   let chart = null;
-  let windowDays = 7;
+  let windowDays = 30;
   let allTags = [];
   let allMeds = [];
 

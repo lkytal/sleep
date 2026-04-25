@@ -11,10 +11,11 @@
 const Analysis = (() => {
   let chart = null;
   let allMeds = [], allEvents = [];
+  let windowDays = 0; // 0 = all
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
     medTaken:  { label: '💊 补剂种类', checked: true },
-    medTime:   { label: '⏰ 补剂时间', checked: false },
+    medTime:   { label: '⏰ 补剂时间', checked: true },
     medDose:   { label: '💉 补剂剂量', checked: false },
     events:    { label: '📝 睡眠事件', checked: false },
     sleepTime: { label: '🕐 睡眠时间因素', checked: false },
@@ -44,9 +45,22 @@ const Analysis = (() => {
     refresh();
   }
 
+  function setWindow(days, btn) {
+    windowDays = days;
+    document.querySelectorAll('#page-analysis .window-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    refresh();
+  }
+
   // ========== Main refresh ==========
   function refresh() {
-    const records = Data.getRecordsSorted();
+    let records = Data.getRecordsSorted();
+    if (windowDays > 0) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - windowDays);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      records = records.filter(r => r.date >= cutoffStr);
+    }
     const activeGroups = Object.entries(featureGroups).filter(([, g]) => g.checked).map(([k]) => k);
 
     if (activeGroups.length === 0) {
@@ -201,7 +215,7 @@ const Analysis = (() => {
       renderStats(null); renderLegend([]);
       return;
     }
-    renderChart(featureNames, featureTypes, result.beta, result.oddsRatios);
+    renderChart(featureNames, featureTypes, result.beta, result.oddsRatios, result.randomEffects);
     renderStats(result);
     renderLegend(featureTypes);
   }
@@ -374,11 +388,16 @@ const Analysis = (() => {
     return value >= 0 ? c.pos : c.neg;
   }
 
-  function renderChart(featureNames, featureTypes, weights, oddsRatios) {
+  function renderChart(featureNames, featureTypes, weights, oddsRatios, randomEffects) {
     const ctx = document.getElementById('analysis-chart').getContext('2d');
     if (chart) chart.destroy();
     const bgColors = weights.map((w, i) => getColor(featureTypes[i], w)[0]);
     const borderColors = weights.map((w, i) => getColor(featureTypes[i], w)[1]);
+
+    // Build random intercepts subtitle
+    const reTitle = randomEffects
+      .map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`)
+      .join('  ');
 
     chart = new Chart(ctx, {
       type: 'bar',
@@ -388,8 +407,17 @@ const Analysis = (() => {
       },
       options: {
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 4 } },
         plugins: {
           legend: { display: false },
+          title: {
+            display: true,
+            text: `随机截距 ▸ ${reTitle}`,
+            color: '#5a6480',
+            font: { family: 'Inter, Noto Sans SC', size: 11, weight: 500 },
+            align: 'start',
+            padding: { bottom: 8 }
+          },
           tooltip: {
             backgroundColor: 'rgba(17,24,39,0.95)', borderColor: '#6c5ce7', borderWidth: 1,
             titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' },
@@ -443,15 +471,11 @@ const Analysis = (() => {
     const r2Pct = (stats.pseudoR2 * 100).toFixed(1);
     const r2Color = stats.pseudoR2 > 0.3 ? 'var(--accent5)' : stats.pseudoR2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
     const sigmaB = Math.sqrt(stats.sigma2).toFixed(3);
-    const reHtml = stats.randomEffects
-      .map(re => `<span class="re-chip" style="opacity:${0.5 + Math.min(Math.abs(re.value), 1) * 0.5}">周${re.day} <em>${re.value >= 0 ? '+' : ''}${re.value.toFixed(3)}</em></span>`)
-      .join('');
     el.innerHTML = `
-      <div class="stat-card"><span class="stat-label">McFadden R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span><span class="stat-desc">${stats.pseudoR2 > 0.3 ? '拟合良好' : stats.pseudoR2 > 0.1 ? '拟合一般' : '拟合较弱'}</span></div>
-      <div class="stat-card"><span class="stat-label">Log-Likelihood</span><span class="stat-value">${stats.logLik.toFixed(1)}</span><span class="stat-desc">AIC: ${stats.aic.toFixed(1)}</span></div>
-      <div class="stat-card"><span class="stat-label">随机效应 σ</span><span class="stat-value">${sigmaB}</span><span class="stat-desc">星期分组截距SD</span></div>
-      <div class="stat-card"><span class="stat-label">模型规模</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.K} 个有序等级, ${stats.p} 个特征</span></div>
-      <div class="stat-card stat-card-wide"><span class="stat-label">随机截距 (星期)</span><div class="re-chips">${reHtml}</div></div>`;
+      <div class="stat-card"><span class="stat-label">R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span></div>
+      <div class="stat-card"><span class="stat-label">LL / AIC</span><span class="stat-value">${stats.logLik.toFixed(0)}</span><span class="stat-desc">AIC ${stats.aic.toFixed(0)}</span></div>
+      <div class="stat-card"><span class="stat-label">σ随机</span><span class="stat-value">${sigmaB}</span></div>
+      <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 ${stats.K}级</span></div>`;
   }
 
   function renderLegend(featureTypes) {
@@ -467,5 +491,5 @@ const Analysis = (() => {
     }).join('');
   }
 
-  return { init, refresh, toggleGroup };
+  return { init, refresh, toggleGroup, setWindow };
 })();
