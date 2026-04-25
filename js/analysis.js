@@ -1,7 +1,7 @@
-/* analysis.js — Ordinal Mixed Effects Model with selectable feature groups */
-/* Model: Cumulative logit (proportional odds) with day-of-week random intercepts
+/* analysis.js — Ordinal regression model with selectable feature groups */
+/* Model: Cumulative logit (proportional odds), optionally with day-of-week random intercepts
  *   P(Y ≤ j | x, b_g) = sigmoid(α_j − x′β − b_g)
- *   b_g ~ N(0, σ²_b)
+ *   b_g ~ N(0, σ²_b), when weekday random intercepts are enabled
  * Feature groups selectable via checkboxes:
  *   - medTaken: supplement taken (0/1)
  *   - medTime:  supplement time offset (hours from mean)
@@ -14,6 +14,7 @@ const Analysis = (() => {
   let allMeds = [], allEvents = [];
   let windowDays = 0; // 0 = all
   let predictionTarget = 'score';
+  let useWeekdayRandomIntercept = false;
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
     medTaken: { label: '💊 补剂种类', checked: true },
@@ -42,12 +43,17 @@ const Analysis = (() => {
   // ========== Feature checkbox UI ==========
   function renderFeatureCheckboxes() {
     const el = document.getElementById('analysis-features');
-    el.innerHTML = Object.entries(featureGroups).map(([key, g]) =>
+    const featureChips = Object.entries(featureGroups).map(([key, g]) =>
       `<label class="af-chip${g.checked ? ' checked' : ''}">
         <input type="checkbox" ${g.checked ? 'checked' : ''} onchange="Analysis.toggleGroup('${key}',this)">
         <span>${g.label}</span>
       </label>`
     ).join('');
+    const weekdayChip = `<label class="af-chip${useWeekdayRandomIntercept ? ' checked' : ''}">
+        <input type="checkbox" ${useWeekdayRandomIntercept ? 'checked' : ''} onchange="Analysis.toggleWeekdayRandom(this)">
+        <span>📅 星期随机截距</span>
+      </label>`;
+    el.innerHTML = featureChips + weekdayChip;
   }
 
   function renderTargetSelect() {
@@ -60,6 +66,12 @@ const Analysis = (() => {
 
   function toggleGroup(key, cb) {
     featureGroups[key].checked = cb.checked;
+    cb.parentElement.classList.toggle('checked', cb.checked);
+    refresh();
+  }
+
+  function toggleWeekdayRandom(cb) {
+    useWeekdayRandomIntercept = cb.checked;
     cb.parentElement.classList.toggle('checked', cb.checked);
     refresh();
   }
@@ -267,7 +279,7 @@ const Analysis = (() => {
     }
 
     const result = target.type === 'ordinal'
-      ? fitOrdinalMixed(X, Y, groups)
+      ? fitOrdinalMixed(X, Y, groups, useWeekdayRandomIntercept)
       : fitLinearRegression(X, Y);
     if (!result) {
       renderEmpty('模型拟合失败 — 数据不足或特征共线');
@@ -356,25 +368,27 @@ const Analysis = (() => {
     return Math.max(upper - lower, 1e-12);
   }
 
-  function penalizedLogLik(X, yIdx, K, alpha, beta, b, gIdx, sigma2) {
+  function penalizedLogLik(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept) {
     const n = X.length, p = X[0].length;
     let ll = 0;
     for (let i = 0; i < n; i++) {
-      let eta = b[gIdx[i]];
+      let eta = useRandomIntercept ? b[gIdx[i]] : 0;
       for (let j = 0; j < p; j++) eta += X[i][j] * beta[j];
       ll += Math.log(ordProb(yIdx[i], K, alpha, eta));
     }
-    for (let g = 0; g < b.length; g++) ll -= 0.5 * b[g] * b[g] / Math.max(sigma2, 1e-6);
+    if (useRandomIntercept) {
+      for (let g = 0; g < b.length; g++) ll -= 0.5 * b[g] * b[g] / Math.max(sigma2, 1e-6);
+    }
     return ll;
   }
 
-  function computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2) {
+  function computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept) {
     const n = X.length, p = X[0].length, nG = b.length;
     const gAlpha = new Float64Array(K - 1);
     const gBeta = new Float64Array(p);
-    const gB = new Float64Array(nG);
+    const gB = new Float64Array(useRandomIntercept ? nG : 0);
     for (let i = 0; i < n; i++) {
-      let eta = b[gIdx[i]];
+      let eta = useRandomIntercept ? b[gIdx[i]] : 0;
       for (let j = 0; j < p; j++) eta += X[i][j] * beta[j];
       const k = yIdx[i];
       const prob = ordProb(k, K, alpha, eta);
@@ -383,25 +397,27 @@ const Analysis = (() => {
       if (k > 0) { const s = sigmoid(alpha[k - 1] - eta); fLower = s * (1 - s); }
       const dEta = (-fUpper + fLower) / prob;
       for (let j = 0; j < p; j++) gBeta[j] += dEta * X[i][j];
-      gB[gIdx[i]] += dEta;
+      if (useRandomIntercept) gB[gIdx[i]] += dEta;
       if (k < K - 1) gAlpha[k] += fUpper / prob;
       if (k > 0) gAlpha[k - 1] -= fLower / prob;
     }
-    for (let g = 0; g < nG; g++) gB[g] -= b[g] / Math.max(sigma2, 1e-6);
+    if (useRandomIntercept) {
+      for (let g = 0; g < nG; g++) gB[g] -= b[g] / Math.max(sigma2, 1e-6);
+    }
     return { gAlpha, gBeta, gB };
   }
 
   // ========== Model fitting ==========
-  function fitOrdinalMixed(X, Y, groups) {
+  function fitOrdinalMixed(X, Y, groups, useRandomIntercept) {
     const levels = [...new Set(Y)].sort((a, b) => a - b);
     const K = levels.length;
     if (K < 2) return null;
     const yIdx = Y.map(y => levels.indexOf(y));
     const n = X.length, p = X[0].length;
-    const uGroups = [...new Set(groups)];
+    const uGroups = useRandomIntercept ? [...new Set(groups)] : [];
     const nG = uGroups.length;
     const gMap = {}; uGroups.forEach((g, i) => { gMap[g] = i; });
-    const gIdx = groups.map(g => gMap[g]);
+    const gIdx = useRandomIntercept ? groups.map(g => gMap[g]) : [];
 
     let alpha = [];
     for (let j = 0; j < K - 1; j++) {
@@ -413,21 +429,21 @@ const Analysis = (() => {
     let sigma2 = 0.5, lr = 0.05, prevLL = -Infinity;
 
     for (let iter = 0; iter < 500; iter++) {
-      const { gAlpha, gBeta, gB } = computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2);
+      const { gAlpha, gBeta, gB } = computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept);
       const newAlpha = alpha.map((a, j) => a + lr * gAlpha[j]);
       const newBeta = beta.map((bv, j) => bv + lr * gBeta[j]);
-      const newB = b.map((bv, g) => bv + lr * gB[g]);
+      const newB = useRandomIntercept ? b.map((bv, g) => bv + lr * gB[g]) : [];
       for (let j = 1; j < K - 1; j++) {
         if (newAlpha[j] <= newAlpha[j - 1] + 0.01) newAlpha[j] = newAlpha[j - 1] + 0.01;
       }
-      const newLL = penalizedLogLik(X, yIdx, K, newAlpha, newBeta, newB, gIdx, sigma2);
+      const newLL = penalizedLogLik(X, yIdx, K, newAlpha, newBeta, newB, gIdx, sigma2, useRandomIntercept);
       if (newLL > prevLL) {
         alpha = newAlpha; beta = newBeta; b = newB;
         prevLL = newLL; lr = Math.min(lr * 1.05, 0.2);
       } else {
         lr *= 0.5; if (lr < 1e-8) break; continue;
       }
-      if (iter % 10 === 0 && iter > 0) {
+      if (useRandomIntercept && iter % 10 === 0 && iter > 0) {
         let ss = 0; for (let g = 0; g < nG; g++) ss += b[g] * b[g];
         sigma2 = Math.max(ss / nG, 0.01);
       }
@@ -436,11 +452,11 @@ const Analysis = (() => {
 
     let logLik = 0;
     for (let i = 0; i < n; i++) {
-      let eta = b[gIdx[i]];
+      let eta = useRandomIntercept ? b[gIdx[i]] : 0;
       for (let j = 0; j < p; j++) eta += X[i][j] * beta[j];
       logLik += Math.log(ordProb(yIdx[i], K, alpha, eta));
     }
-    const numParams = (K - 1) + p + 1;
+    const numParams = (K - 1) + p + (useRandomIntercept ? 1 : 0);
     const aic = -2 * logLik + 2 * numParams;
     const oddsRatios = beta.map(b => Math.exp(b));
     let llNull = 0;
@@ -449,7 +465,7 @@ const Analysis = (() => {
     const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
     const randomEffects = uGroups.map((g, i) => ({ day: dayLabels[g], value: b[i] }));
 
-    return { beta: Array.from(beta), oddsRatios, alpha, sigma2, logLik, aic, pseudoR2, n, p, K, levels, randomEffects, numParams };
+    return { beta: Array.from(beta), oddsRatios, alpha, sigma2, logLik, aic, pseudoR2, n, p, K, levels, randomEffects, useRandomIntercept, numParams };
   }
 
   function solveLinearSystem(A, b) {
@@ -541,7 +557,9 @@ const Analysis = (() => {
     const borderColors = weights.map((w, i) => getColor(featureTypes[i], w)[1]);
 
     const titleText = isOrdinal
-      ? `随机截距 ▸ ${randomEffects.map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`).join('  ')}`
+      ? (modelInfo.useRandomIntercept
+        ? `随机截距 ▸ ${randomEffects.map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`).join('  ')}`
+        : '累积Logit ▸ 未使用星期随机截距')
       : `线性回归 ▸ 目标：${modelInfo.target.label} · R² ${(modelInfo.r2 * 100).toFixed(1)}% · RMSE ${modelInfo.rmse.toFixed(2)}${unit}`;
 
     chart = new Chart(ctx, {
@@ -631,10 +649,13 @@ const Analysis = (() => {
     const r2Pct = (stats.pseudoR2 * 100).toFixed(1);
     const r2Color = stats.pseudoR2 > 0.3 ? 'var(--accent5)' : stats.pseudoR2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
     const sigmaB = Math.sqrt(stats.sigma2).toFixed(3);
+    const interceptCard = stats.useRandomIntercept
+      ? `<div class="stat-card"><span class="stat-label">σ随机</span><span class="stat-value">${sigmaB}</span></div>`
+      : '<div class="stat-card"><span class="stat-label">模型</span><span class="stat-value">Logit</span><span class="stat-desc">无星期随机</span></div>';
     el.innerHTML = `
       <div class="stat-card"><span class="stat-label">R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span></div>
       <div class="stat-card"><span class="stat-label">LL / AIC</span><span class="stat-value">${stats.logLik.toFixed(0)}</span><span class="stat-desc">AIC ${stats.aic.toFixed(0)}</span></div>
-      <div class="stat-card"><span class="stat-label">σ随机</span><span class="stat-value">${sigmaB}</span></div>
+      ${interceptCard}
       <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 ${stats.K}级</span></div>`;
   }
 
@@ -651,5 +672,5 @@ const Analysis = (() => {
     }).join('');
   }
 
-  return { init, refresh, toggleGroup, setWindow, setTarget };
+  return { init, refresh, toggleGroup, toggleWeekdayRandom, setWindow, setTarget };
 })();

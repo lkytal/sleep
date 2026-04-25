@@ -29,7 +29,7 @@ const Dashboard = (() => {
     }
     renderChart(filtered);
     renderLegend();
-    renderRecent(records.slice(-10).reverse());
+    renderRecent(records.slice().reverse());
   }
 
   /* ---- Chart ---- */
@@ -218,6 +218,8 @@ const Dashboard = (() => {
 
     const tagMap = {};
     allTags.forEach(t => { tagMap[t.id] = t.name; });
+    const medMap = {};
+    allMeds.forEach(m => { medMap[m.id] = m.name; });
 
     let html = '<h2>最近记录</h2>';
     records.forEach(r => {
@@ -227,12 +229,17 @@ const Dashboard = (() => {
       const bed = `${String(r.bedtime.hour).padStart(2,'0')}:${String(r.bedtime.minute).padStart(2,'0')}`;
       const wake = `${String(r.wakeTime.hour).padStart(2,'0')}:${String(r.wakeTime.minute).padStart(2,'0')}`;
       const tagHtml = (r.tags || []).map(t => `<span class="rc-tag">${tagMap[t] || t}</span>`).join('');
+      const medHtml = (r.medications || []).map(med => {
+        const dose = med.dose ? ` ${med.dose}` : '';
+        return `<span class="rc-med">${medMap[med.id] || med.id}${dose}</span>`;
+      }).join('');
 
       html += `<div class="record-card" onclick="Dashboard.editRecord('${r.date}')">
         <span class="rc-date">${r.date}</span>
         <span class="rc-score" style="color:${scoreColor(r.score).replace('0.8','1').replace('0.7','1')}">${r.score}</span>
         <span class="rc-duration">${bed} → ${wake}<br>${dur}</span>
         <span class="rc-tags">${tagHtml}</span>
+        <span class="rc-meds">${medHtml}</span>
         <span class="rc-actions"><button class="rc-delete" onclick="event.stopPropagation();Dashboard.deleteRecord('${r.date}')">删除</button></span>
       </div>`;
     });

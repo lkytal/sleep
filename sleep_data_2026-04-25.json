@@ -69,7 +69,9 @@
     },
     "effectiveSleep": 465,
     "score": 8.5,
-    "tags": [],
+    "tags": [
+      "recovery_after_nap"
+    ],
     "events": [
       "shower",
       "nap"
@@ -344,6 +346,7 @@
     "tags": [
       "sleepness"
     ],
+    "events": [],
     "medications": [
       {
         "id": "melatonin",
@@ -351,7 +354,7 @@
           "hour": 20,
           "minute": 30
         },
-        "dose": "0.3mg"
+        "dose": "0.26mg"
       },
       {
         "id": "PS",
@@ -377,7 +380,12 @@
         },
         "dose": "100mg"
       }
-    ]
+    ],
+    "biometrics": {
+      "hrv": 24,
+      "rhr": 72,
+      "deepSleepPct": 20
+    }
   },
   "2026-04-14": {
     "date": "2026-04-14",
@@ -389,12 +397,13 @@
       "hour": 13,
       "minute": 30
     },
-    "effectiveSleep": 435,
-    "score": 7,
+    "effectiveSleep": 420,
+    "score": 7.5,
     "tags": [
       "wake_up",
       "sleepness"
     ],
+    "events": [],
     "medications": [
       {
         "id": "melatonin",
@@ -402,7 +411,7 @@
           "hour": 20,
           "minute": 30
         },
-        "dose": "0.3mg"
+        "dose": "0.26mg"
       },
       {
         "id": "magnesium",
@@ -436,7 +445,12 @@
         },
         "dose": "100mg"
       }
-    ]
+    ],
+    "biometrics": {
+      "hrv": 18,
+      "rhr": 75,
+      "deepSleepPct": 24
+    }
   },
   "2026-04-13": {
     "date": "2026-04-13",
@@ -453,6 +467,7 @@
     "tags": [
       "sleepness"
     ],
+    "events": [],
     "medications": [
       {
         "id": "melatonin",
@@ -460,7 +475,7 @@
           "hour": 20,
           "minute": 30
         },
-        "dose": "0.3mg"
+        "dose": "0.26mg"
       },
       {
         "id": "magnesium",
@@ -494,7 +509,12 @@
         },
         "dose": "100mg"
       }
-    ]
+    ],
+    "biometrics": {
+      "hrv": 24,
+      "rhr": 76,
+      "deepSleepPct": 23
+    }
   },
   "2026-04-22": {
     "date": "2026-04-22",
@@ -565,7 +585,8 @@
     "effectiveSleep": 480,
     "score": 7.5,
     "tags": [
-      "dizzy"
+      "dizzy",
+      "recovery_after_nap"
     ],
     "events": [],
     "medications": [
@@ -667,7 +688,8 @@
     "effectiveSleep": 465,
     "score": 7.5,
     "tags": [
-      "headache"
+      "headache",
+      "recovery_after_rest"
     ],
     "events": [
       "foot_bath",

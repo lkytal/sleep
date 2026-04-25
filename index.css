@@ -196,6 +196,23 @@ body {
   padding: 2px 8px;
   border-radius: 4px;
 }
+.rc-meds {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 120px;
+  max-width: 260px;
+  margin-left: 1rem;
+}
+.rc-med {
+  background: rgba(0,206,201,0.14);
+  color: var(--accent2);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
 .rc-actions { margin-left: 1rem; }
 .rc-delete {
   background: transparent;
