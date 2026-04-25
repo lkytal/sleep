@@ -7,18 +7,20 @@
  *   - medTime:  supplement time offset (hours from mean)
  *   - medDose:  supplement dose (standardized)
  *   - events:   sleep events (0/1 per event type)
- *   - sleepTime: bedtime, durations, prev-day features */
+ *   - sleepTime: bedtime, durations, prev-day features
+ *   - bioMetrics: HRV, resting HR, deep sleep % (standardized) */
 const Analysis = (() => {
   let chart = null;
   let allMeds = [], allEvents = [];
   let windowDays = 0; // 0 = all
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
-    medTaken:  { label: '💊 补剂种类', checked: true },
-    medTime:   { label: '⏰ 补剂时间', checked: true },
-    medDose:   { label: '💉 补剂剂量', checked: false },
-    events:    { label: '📝 睡眠事件', checked: false },
+    medTaken: { label: '💊 补剂种类', checked: true },
+    medTime: { label: '⏰ 补剂时间', checked: true },
+    medDose: { label: '💉 补剂剂量', checked: false },
+    events: { label: '📝 睡眠事件', checked: false },
     sleepTime: { label: '🕐 睡眠时间因素', checked: false },
+    bioMetrics: { label: '📊 生理指标', checked: false },
   };
 
   async function init() {
@@ -78,10 +80,17 @@ const Analysis = (() => {
     const eventIds = allEvents.map(e => e.id);
     const has = k => activeGroups.includes(k);
     const needsPrev = has('sleepTime');
+    const needsBio = has('bioMetrics');
 
     // --- Precompute means for standardization ---
     const medMeanMin = computeMedMeans(records, medIds);
     const medMeanDose = computeMedMeanDose(records, medIds);
+
+    // Bio metrics stats (z-score)
+    let bioStats = { hrv: {}, rhr: {}, deep: {} };
+    if (needsBio) {
+      bioStats = computeBioStats(records);
+    }
 
     let meanSleep = 0, sdSleep = 1, meanBed = 0, sdBed = 1;
     if (needsPrev) {
@@ -135,9 +144,13 @@ const Analysis = (() => {
     }
     if (has('sleepTime')) {
       featureNames.push('绝对入睡时间'); featureTypes.push('sleep');
-      featureNames.push('当日有效睡眠'); featureTypes.push('sleep');
       featureNames.push('前日有效睡眠'); featureTypes.push('sleep');
       featureNames.push('前日睡眠评分'); featureTypes.push('sleep');
+    }
+    if (has('bioMetrics')) {
+      if (bioStats.hrv.count > 0) { featureNames.push('HRV'); featureTypes.push('bio'); }
+      if (bioStats.rhr.count > 0) { featureNames.push('静息心率'); featureTypes.push('bio'); }
+      if (bioStats.deep.count > 0) { featureNames.push('深睡比例'); featureTypes.push('bio'); }
     }
 
     // --- Build X, Y, groups ---
@@ -197,6 +210,13 @@ const Analysis = (() => {
         row.push((r.effectiveSleep - meanSleep) / sdSleep);
         row.push((prevRecord.effectiveSleep - meanSleep) / sdSleep);
         row.push(prevRecord.score / 5 - 1);
+      }
+      if (has('bioMetrics')) {
+        const bio = r.biometrics || {};
+        // Skip record if no bio data at all when bioMetrics is the only active group
+        if (bioStats.hrv.count > 0) row.push(bio.hrv != null ? (bio.hrv - bioStats.hrv.mean) / bioStats.hrv.sd : 0);
+        if (bioStats.rhr.count > 0) row.push(bio.rhr != null ? (bio.rhr - bioStats.rhr.mean) / bioStats.rhr.sd : 0);
+        if (bioStats.deep.count > 0) row.push(bio.deepSleepPct != null ? (bio.deepSleepPct - bioStats.deep.mean) / bioStats.deep.sd : 0);
       }
 
       X.push(row); Y.push(r.score);
@@ -263,6 +283,23 @@ const Analysis = (() => {
       result[id] = { mean, sd };
     });
     return result;
+  }
+
+  function computeBioStats(records) {
+    const hrvVals = [], rhrVals = [], deepVals = [];
+    records.forEach(r => {
+      const bio = r.biometrics || {};
+      if (bio.hrv != null) hrvVals.push(bio.hrv);
+      if (bio.rhr != null) rhrVals.push(bio.rhr);
+      if (bio.deepSleepPct != null) deepVals.push(bio.deepSleepPct);
+    });
+    const stat = vals => {
+      if (vals.length === 0) return { mean: 0, sd: 1, count: 0 };
+      const mean = vals.reduce((s, x) => s + x, 0) / vals.length;
+      const sd = Math.sqrt(vals.reduce((s, x) => s + (x - mean) ** 2, 0) / vals.length) || 1;
+      return { mean, sd, count: vals.length };
+    };
+    return { hrv: stat(hrvVals), rhr: stat(rhrVals), deep: stat(deepVals) };
   }
 
   // ========== Math helpers ==========
@@ -376,11 +413,12 @@ const Analysis = (() => {
 
   // ========== Rendering ==========
   const TYPE_COLORS = {
-    taken:  { pos: ['rgba(85,239,196,0.75)', '#55efc4'],  neg: ['rgba(225,112,85,0.75)', '#e17055'] },
+    taken: { pos: ['rgba(85,239,196,0.75)', '#55efc4'], neg: ['rgba(225,112,85,0.75)', '#e17055'] },
     offset: { pos: ['rgba(116,185,255,0.75)', '#74b9ff'], neg: ['rgba(253,203,110,0.75)', '#fdcb6e'] },
-    dose:   { pos: ['rgba(0,206,201,0.75)', '#00cec9'],   neg: ['rgba(214,48,49,0.65)', '#d63031'] },
-    event:  { pos: ['rgba(253,121,168,0.75)', '#fd79a8'], neg: ['rgba(99,110,114,0.65)', '#636e72'] },
-    sleep:  { pos: ['rgba(162,155,254,0.75)', '#a29bfe'], neg: ['rgba(255,234,167,0.75)', '#ffeaa7'] },
+    dose: { pos: ['rgba(0,206,201,0.75)', '#00cec9'], neg: ['rgba(214,48,49,0.65)', '#d63031'] },
+    event: { pos: ['rgba(253,121,168,0.75)', '#fd79a8'], neg: ['rgba(99,110,114,0.65)', '#636e72'] },
+    sleep: { pos: ['rgba(162,155,254,0.75)', '#a29bfe'], neg: ['rgba(255,234,167,0.75)', '#ffeaa7'] },
+    bio:   { pos: ['rgba(129,236,236,0.75)', '#81ecec'], neg: ['rgba(255,118,117,0.75)', '#ff7675'] },
   };
 
   function getColor(type, value) {
@@ -482,7 +520,7 @@ const Analysis = (() => {
     const el = document.getElementById('analysis-legend');
     const active = [...new Set(featureTypes)];
     const labels = {
-      taken: '补剂种类', offset: '补剂时间', dose: '补剂剂量', event: '睡眠事件', sleep: '睡眠时间',
+      taken: '补剂种类', offset: '补剂时间', dose: '补剂剂量', event: '睡眠事件', sleep: '睡眠时间', bio: '生理指标',
     };
     el.innerHTML = active.map(t => {
       const c = TYPE_COLORS[t];
