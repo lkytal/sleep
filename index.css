@@ -581,29 +581,42 @@ body {
 }
 
 /* ===== Analysis Page ===== */
-.analysis-mode-selector {
+.analysis-features {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
 }
-.analysis-mode-btn {
+.af-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   font: 500 0.85rem var(--font);
-  padding: 0.4rem 1.1rem;
-  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  border-radius: 10px;
   cursor: pointer;
   transition: var(--transition);
+  user-select: none;
 }
-.analysis-mode-btn:hover {
+.af-chip:hover {
   border-color: var(--accent);
   color: var(--text-primary);
 }
-.analysis-mode-btn.active {
-  background: var(--accent);
+.af-chip.checked {
+  background: rgba(108,92,231,0.15);
   border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 12px var(--accent-glow);
+  color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.af-chip input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
 }
 .analysis-desc {
   color: var(--text-secondary);

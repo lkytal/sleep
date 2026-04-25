@@ -41,23 +41,13 @@
     </section>
     <section id="page-analysis" class="page">
       <div class="dashboard-header">
-        <h1>🔬 药物回归分析</h1>
-        <div class="analysis-mode-selector">
-          <button class="analysis-mode-btn active" onclick="Analysis.setMode('meds',this)">💊 药物分析</button>
-          <button class="analysis-mode-btn" onclick="Analysis.setMode('full',this)">📊 综合分析</button>
-        </div>
+        <h1>🔬 睡眠回归分析</h1>
       </div>
-      <p class="analysis-desc">使用 <strong>有序混合效应模型</strong>（累积Logit / 比例优势模型 + 星期随机截距）。<br><strong>💊 药物分析</strong>：药物是否服用 + 时间偏移。<strong>📊 综合分析</strong>：额外纳入当日有效睡眠、前日有效睡眠和前日评分。<br>系数为log-odds，OR &gt; 1 表示该特征与更高评分等级相关。</p>
+      <p class="analysis-desc">使用 <strong>有序混合效应模型</strong>（累积Logit / 比例优势模型 + 星期随机截距）。勾选下方指标组合纳入分析。系数为log-odds，OR &gt; 1 表示该特征与更高评分等级相关。</p>
+      <div class="analysis-features" id="analysis-features"></div>
       <div class="analysis-stats" id="analysis-stats"></div>
       <div class="chart-container analysis-chart-container"><canvas id="analysis-chart"></canvas></div>
-      <div class="analysis-legend">
-        <div class="legend-item"><span class="legend-dot" style="background:#55efc4"></span>是否服用 (正向)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#e17055"></span>是否服用 (负向)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#74b9ff"></span>时间偏移 (正向)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#fdcb6e"></span>时间偏移 (负向)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#a29bfe"></span>睡眠特征 (正向)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#ffeaa7"></span>睡眠特征 (负向)</div>
-      </div>
+      <div class="analysis-legend" id="analysis-legend"></div>
     </section>
   </main>
   <!-- Record Modal -->
