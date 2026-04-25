@@ -110,6 +110,7 @@ const Data = (() => {
 
   async function loadTags() { return loadConfig('config/tags.csv'); }
   async function loadMedications() { return loadConfig('config/medications.csv'); }
+  async function loadEvents() { return loadConfig('config/events.csv'); }
 
   /* Export */
   function exportData() {
@@ -155,7 +156,7 @@ const Data = (() => {
     if (loaded && typeof Dashboard !== 'undefined') Dashboard.refresh();
   }
 
-  return { init, getAll, saveRecord, deleteRecord, getRecordsSorted, loadTags, loadMedications, exportData, importData, handleImport, pickFile };
+  return { init, getAll, saveRecord, deleteRecord, getRecordsSorted, loadTags, loadMedications, loadEvents, exportData, importData, handleImport, pickFile };
 })();
 
 /* Global toast */

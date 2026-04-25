@@ -1,14 +1,18 @@
-/* record.js — Record modal: time pickers, score, tags, medications */
+/* record.js — Record modal: wheel pickers for date/duration/score, tags, events, medications, biometrics */
 const Record = (() => {
   let tags = [];
   let medications = [];
+  let events = [];
   let selectedTags = new Set();
+  let selectedEvents = new Set();
   let checkedMeds = {};
 
   async function init() {
     tags = await Data.loadTags();
     medications = await Data.loadMedications();
+    events = await Data.loadEvents();
     renderTags();
+    renderEvents();
     renderMedications();
     initWheels();
   }
@@ -20,7 +24,9 @@ const Record = (() => {
       loadRecord(existingRecord);
       document.getElementById('modal-title').textContent = '编辑记录 — ' + existingRecord.date;
     } else {
-      document.getElementById('record-date').value = new Date().toISOString().slice(0, 10);
+      // Set date wheels to today
+      const now = new Date();
+      setDateWheels(now.getFullYear(), now.getMonth() + 1, now.getDate());
       document.getElementById('modal-title').textContent = '记录睡眠';
     }
     document.getElementById('record-modal').classList.add('open');
@@ -36,26 +42,64 @@ const Record = (() => {
     if (e.target === document.getElementById('record-modal')) close();
   }
 
+  /* ---- Date wheel helpers ---- */
+  function setDateWheels(year, month, day) {
+    document.getElementById('date-year').textContent = String(year);
+    document.getElementById('date-month').textContent = String(month).padStart(2, '0');
+    document.getElementById('date-day').textContent = String(day).padStart(2, '0');
+  }
+
+  function getDateFromWheels() {
+    const y = parseInt(document.getElementById('date-year').textContent);
+    const m = parseInt(document.getElementById('date-month').textContent);
+    const d = parseInt(document.getElementById('date-day').textContent);
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
   /* ---- Load existing record into form ---- */
   function loadRecord(r) {
-    document.getElementById('record-date').value = r.date;
+    // Date
+    const parts = r.date.split('-');
+    setDateWheels(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+
+    // Bedtime / Wake
     document.getElementById('bedtime-hour').textContent = String(r.bedtime.hour).padStart(2, '0');
     document.getElementById('bedtime-min').textContent = String(r.bedtime.minute).padStart(2, '0');
     document.getElementById('wake-hour').textContent = String(r.wakeTime.hour).padStart(2, '0');
     document.getElementById('wake-min').textContent = String(r.wakeTime.minute).padStart(2, '0');
 
-    document.getElementById('duration-slider').value = r.effectiveSleep;
-    updateDurationDisplay(r.effectiveSleep);
+    // Duration (wheel)
+    const durH = Math.floor(r.effectiveSleep / 60);
+    const durM = r.effectiveSleep % 60;
+    // Round minute to nearest 15
+    const roundedM = Math.round(durM / 15) * 15;
+    document.getElementById('dur-hour').textContent = String(durH).padStart(2, '0');
+    document.getElementById('dur-min').textContent = String(roundedM).padStart(2, '0');
 
-    document.getElementById('score-slider').value = r.score;
-    updateScoreDisplay(r.score);
+    // Score (wheel)
+    document.getElementById('score-val').textContent = parseFloat(r.score).toFixed(1);
+    updateScoreEmoji(r.score);
 
     // Tags
     selectedTags.clear();
     (r.tags || []).forEach(t => selectedTags.add(t));
-    document.querySelectorAll('.tag-chip').forEach(chip => {
+    document.querySelectorAll('#tags-container .tag-chip').forEach(chip => {
       chip.classList.toggle('selected', selectedTags.has(chip.dataset.id));
     });
+
+    // Events
+    selectedEvents.clear();
+    (r.events || []).forEach(e => selectedEvents.add(e));
+    document.querySelectorAll('#events-container .tag-chip').forEach(chip => {
+      chip.classList.toggle('selected', selectedEvents.has(chip.dataset.id));
+    });
+
+    // Biometrics
+    if (r.biometrics) {
+      document.getElementById('bio-hrv').value = r.biometrics.hrv != null ? r.biometrics.hrv : '';
+      document.getElementById('bio-rhr').value = r.biometrics.rhr != null ? r.biometrics.rhr : '';
+      document.getElementById('bio-deep').value = r.biometrics.deepSleepPct != null ? r.biometrics.deepSleepPct : '';
+    }
 
     // Medications
     checkedMeds = {};
@@ -96,15 +140,35 @@ const Record = (() => {
   }
 
   function handleWheel(el, delta) {
+    const field = el.dataset.field;
+    const valEl = el.querySelector('.time-value');
+
+    // Score uses float
+    if (field === 'score-val') {
+      const step = 0.5;
+      let current = parseFloat(valEl.textContent);
+      if (delta < 0) current += step; else current -= step;
+      if (current > 10) current = 1;
+      if (current < 1) current = 10;
+      valEl.textContent = current.toFixed(1);
+      updateScoreEmoji(current);
+      return;
+    }
+
     const min = parseInt(el.dataset.min);
     const max = parseInt(el.dataset.max);
     const step = parseInt(el.dataset.step);
-    const valEl = el.querySelector('.time-value');
     let current = parseInt(valEl.textContent);
     if (delta < 0) current += step; else current -= step;
     if (current > max) current = min;
     if (current < min) current = max;
-    valEl.textContent = String(current).padStart(2, '0');
+
+    // For year field, no zero-pad
+    if (field === 'date-year') {
+      valEl.textContent = String(current);
+    } else {
+      valEl.textContent = String(current).padStart(2, '0');
+    }
   }
 
   /* ---- Medication time wheels ---- */
@@ -123,21 +187,12 @@ const Record = (() => {
     }, { passive: false });
   }
 
-  /* ---- Duration display ---- */
-  function updateDurationDisplay(val) {
-    const mins = parseInt(val);
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    document.getElementById('duration-display').textContent = `${h}h ${String(m).padStart(2, '0')}m`;
-  }
-
-  /* ---- Score display ---- */
-  function updateScoreDisplay(val) {
+  /* ---- Score emoji ---- */
+  function updateScoreEmoji(val) {
     const v = parseFloat(val);
-    document.getElementById('score-display').textContent = v.toFixed(1);
     const emojis = ['😫','😣','😞','😕','😐','🙂','😊','😄','🤩','🌟'];
     const idx = Math.min(Math.floor(v) - 1, 9);
-    document.getElementById('score-emoji').textContent = emojis[idx];
+    document.getElementById('score-emoji').textContent = emojis[Math.max(0, idx)];
   }
 
   /* ---- Tags ---- */
@@ -153,6 +208,24 @@ const Record = (() => {
         chip.classList.toggle('selected');
         if (selectedTags.has(tag.id)) selectedTags.delete(tag.id);
         else selectedTags.add(tag.id);
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  /* ---- Events ---- */
+  function renderEvents() {
+    const container = document.getElementById('events-container');
+    container.innerHTML = '';
+    events.forEach(ev => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip event-chip';
+      chip.textContent = ev.name;
+      chip.dataset.id = ev.id;
+      chip.addEventListener('click', () => {
+        chip.classList.toggle('selected');
+        if (selectedEvents.has(ev.id)) selectedEvents.delete(ev.id);
+        else selectedEvents.add(ev.id);
       });
       container.appendChild(chip);
     });
@@ -234,15 +307,30 @@ const Record = (() => {
 
   /* ---- Save ---- */
   function save() {
-    const date = document.getElementById('record-date').value;
+    const date = getDateFromWheels();
     if (!date) { showToast('请选择日期'); return; }
 
     const bedHour = parseInt(document.getElementById('bedtime-hour').textContent);
     const bedMin = parseInt(document.getElementById('bedtime-min').textContent);
     const wakeHour = parseInt(document.getElementById('wake-hour').textContent);
     const wakeMin = parseInt(document.getElementById('wake-min').textContent);
-    const effectiveSleep = parseInt(document.getElementById('duration-slider').value);
-    const score = parseFloat(document.getElementById('score-slider').value);
+
+    // Duration from wheels
+    const durH = parseInt(document.getElementById('dur-hour').textContent);
+    const durM = parseInt(document.getElementById('dur-min').textContent);
+    const effectiveSleep = durH * 60 + durM;
+
+    // Score from wheel
+    const score = parseFloat(document.getElementById('score-val').textContent);
+
+    // Biometrics (optional)
+    const hrvVal = document.getElementById('bio-hrv').value;
+    const rhrVal = document.getElementById('bio-rhr').value;
+    const deepVal = document.getElementById('bio-deep').value;
+    const biometrics = {};
+    if (hrvVal !== '') biometrics.hrv = parseInt(hrvVal);
+    if (rhrVal !== '') biometrics.rhr = parseInt(rhrVal);
+    if (deepVal !== '') biometrics.deepSleepPct = parseInt(deepVal);
 
     const meds = [];
     document.querySelectorAll('.med-item').forEach(item => {
@@ -266,8 +354,14 @@ const Record = (() => {
       effectiveSleep,
       score,
       tags: Array.from(selectedTags),
+      events: Array.from(selectedEvents),
       medications: meds
     };
+
+    // Only add biometrics if any value was entered
+    if (Object.keys(biometrics).length > 0) {
+      record.biometrics = biometrics;
+    }
 
     Data.saveRecord(record);
     showToast('记录已保存 ✓');
@@ -277,8 +371,10 @@ const Record = (() => {
 
   function resetForm() {
     selectedTags.clear();
+    selectedEvents.clear();
     checkedMeds = {};
-    document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('#tags-container .tag-chip').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('#events-container .tag-chip').forEach(c => c.classList.remove('selected'));
     document.querySelectorAll('.med-item').forEach(item => {
       item.classList.remove('checked');
       item.querySelector('.med-checkbox').checked = false;
@@ -304,11 +400,16 @@ const Record = (() => {
     document.getElementById('bedtime-min').textContent = '00';
     document.getElementById('wake-hour').textContent = '07';
     document.getElementById('wake-min').textContent = '00';
-    document.getElementById('score-slider').value = 7;
-    updateScoreDisplay(7);
-    document.getElementById('duration-slider').value = 420;
-    updateDurationDisplay(420);
+    document.getElementById('dur-hour').textContent = '07';
+    document.getElementById('dur-min').textContent = '00';
+    document.getElementById('score-val').textContent = '7.0';
+    updateScoreEmoji(7);
+
+    // Reset biometrics
+    document.getElementById('bio-hrv').value = '';
+    document.getElementById('bio-rhr').value = '';
+    document.getElementById('bio-deep').value = '';
   }
 
-  return { init, open, close, handleOverlayClick, updateDurationDisplay, updateScoreDisplay, save };
+  return { init, open, close, handleOverlayClick, save };
 })();
