@@ -1,0 +1,693 @@
+{
+  "2026-04-21": {
+    "date": "2026-04-21",
+    "bedtime": {
+      "hour": 3,
+      "minute": 0
+    },
+    "wakeTime": {
+      "hour": 11,
+      "minute": 10
+    },
+    "effectiveSleep": 465,
+    "score": 6,
+    "tags": [
+      "groggy"
+    ],
+    "events": [
+      "nap"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.21mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 40
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "130mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 27,
+      "rhr": 73,
+      "deepSleepPct": 27
+    }
+  },
+  "2026-04-20": {
+    "date": "2026-04-20",
+    "bedtime": {
+      "hour": 2,
+      "minute": 0
+    },
+    "wakeTime": {
+      "hour": 10,
+      "minute": 10
+    },
+    "effectiveSleep": 465,
+    "score": 8.5,
+    "tags": [],
+    "events": [
+      "shower",
+      "nap"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.22mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 0,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 1,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 27,
+      "rhr": 74,
+      "deepSleepPct": 30
+    }
+  },
+  "2026-04-19": {
+    "date": "2026-04-19",
+    "bedtime": {
+      "hour": 3,
+      "minute": 0
+    },
+    "wakeTime": {
+      "hour": 11,
+      "minute": 10
+    },
+    "effectiveSleep": 450,
+    "score": 5,
+    "tags": [
+      "heavy_groggy",
+      "dizzy"
+    ],
+    "events": [
+      "travel"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.24mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 30,
+      "rhr": 71,
+      "deepSleepPct": 18
+    }
+  },
+  "2026-04-18": {
+    "date": "2026-04-18",
+    "bedtime": {
+      "hour": 4,
+      "minute": 10
+    },
+    "wakeTime": {
+      "hour": 12,
+      "minute": 0
+    },
+    "effectiveSleep": 435,
+    "score": 7.5,
+    "tags": [
+      "light_sleepness"
+    ],
+    "events": [],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.24mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 3,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 26,
+      "rhr": 73,
+      "deepSleepPct": 21
+    }
+  },
+  "2026-04-17": {
+    "date": "2026-04-17",
+    "bedtime": {
+      "hour": 3,
+      "minute": 40
+    },
+    "wakeTime": {
+      "hour": 12,
+      "minute": 0
+    },
+    "effectiveSleep": 480,
+    "score": 8,
+    "tags": [],
+    "events": [],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.24mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1500mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 27,
+      "rhr": 73,
+      "deepSleepPct": 24
+    }
+  },
+  "2026-04-16": {
+    "date": "2026-04-16",
+    "bedtime": {
+      "hour": 3,
+      "minute": 30
+    },
+    "wakeTime": {
+      "hour": 12,
+      "minute": 40
+    },
+    "effectiveSleep": 525,
+    "score": 9.5,
+    "tags": [],
+    "events": [],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.24mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 24,
+      "rhr": 72,
+      "deepSleepPct": 28
+    }
+  },
+  "2026-04-15": {
+    "date": "2026-04-15",
+    "bedtime": {
+      "hour": 4,
+      "minute": 40
+    },
+    "wakeTime": {
+      "hour": 12,
+      "minute": 0
+    },
+    "effectiveSleep": 405,
+    "score": 6.5,
+    "tags": [
+      "sleepness"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.3mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ]
+  },
+  "2026-04-14": {
+    "date": "2026-04-14",
+    "bedtime": {
+      "hour": 5,
+      "minute": 30
+    },
+    "wakeTime": {
+      "hour": 13,
+      "minute": 30
+    },
+    "effectiveSleep": 435,
+    "score": 7,
+    "tags": [
+      "wake_up",
+      "sleepness"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.3mg"
+      },
+      {
+        "id": "magnesium",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "100mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ]
+  },
+  "2026-04-13": {
+    "date": "2026-04-13",
+    "bedtime": {
+      "hour": 3,
+      "minute": 30
+    },
+    "wakeTime": {
+      "hour": 11,
+      "minute": 10
+    },
+    "effectiveSleep": 420,
+    "score": 7,
+    "tags": [
+      "sleepness"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.3mg"
+      },
+      {
+        "id": "magnesium",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "100mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 1,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ]
+  },
+  "2026-04-22": {
+    "date": "2026-04-22",
+    "bedtime": {
+      "hour": 3,
+      "minute": 20
+    },
+    "wakeTime": {
+      "hour": 12,
+      "minute": 10
+    },
+    "effectiveSleep": 480,
+    "score": 7.5,
+    "tags": [],
+    "events": [
+      "shower"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.2mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 0,
+          "minute": 30
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 2,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 33,
+      "rhr": 73,
+      "deepSleepPct": 18
+    }
+  },
+  "2026-04-23": {
+    "date": "2026-04-23",
+    "bedtime": {
+      "hour": 2,
+      "minute": 40
+    },
+    "wakeTime": {
+      "hour": 11,
+      "minute": 0
+    },
+    "effectiveSleep": 480,
+    "score": 7.5,
+    "tags": [
+      "dizzy"
+    ],
+    "events": [],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.2mg"
+      },
+      {
+        "id": "PS",
+        "time": {
+          "hour": 23,
+          "minute": 30
+        },
+        "dose": "20mg"
+      },
+      {
+        "id": "Glycine",
+        "time": {
+          "hour": 0,
+          "minute": 40
+        },
+        "dose": "1000mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 0,
+          "minute": 40
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 33,
+      "rhr": 70,
+      "deepSleepPct": 35
+    }
+  },
+  "2026-04-24": {
+    "date": "2026-04-24",
+    "bedtime": {
+      "hour": 3,
+      "minute": 0
+    },
+    "wakeTime": {
+      "hour": 11,
+      "minute": 20
+    },
+    "effectiveSleep": 420,
+    "score": 7,
+    "tags": [
+      "wake_up",
+      "dizzy",
+      "groggy"
+    ],
+    "events": [
+      "st",
+      "foot_bath",
+      "nap"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 30
+        },
+        "dose": "0.21mg"
+      },
+      {
+        "id": "Theanine",
+        "time": {
+          "hour": 1,
+          "minute": 0
+        },
+        "dose": "100mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 33,
+      "rhr": 67,
+      "deepSleepPct": 40
+    }
+  },
+  "2026-04-25": {
+    "date": "2026-04-25",
+    "bedtime": {
+      "hour": 3,
+      "minute": 0
+    },
+    "wakeTime": {
+      "hour": 11,
+      "minute": 50
+    },
+    "effectiveSleep": 465,
+    "score": 7.5,
+    "tags": [
+      "headache"
+    ],
+    "events": [
+      "foot_bath",
+      "st",
+      "nap"
+    ],
+    "medications": [
+      {
+        "id": "melatonin",
+        "time": {
+          "hour": 20,
+          "minute": 20
+        },
+        "dose": "0.21mg"
+      }
+    ],
+    "biometrics": {
+      "hrv": 23,
+      "rhr": 70,
+      "deepSleepPct": 18
+    }
+  }
+}

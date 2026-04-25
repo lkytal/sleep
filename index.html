@@ -51,7 +51,13 @@
           </div>
         </div>
         <p class="analysis-subtitle">有序混合效应模型（累积Logit + 星期随机截距）· 系数为log-odds · OR &gt; 1 → 更高评分</p>
-        <div class="analysis-features" id="analysis-features"></div>
+        <div class="analysis-feature-row">
+          <div class="analysis-features" id="analysis-features"></div>
+          <label class="analysis-target-control">
+            <span>预测目标</span>
+            <select id="analysis-target" onchange="Analysis.setTarget(this.value)"></select>
+          </label>
+        </div>
         <div class="analysis-stats" id="analysis-stats"></div>
       </div>
       <div class="chart-container analysis-chart-container"><canvas id="analysis-chart"></canvas></div>

@@ -13,6 +13,7 @@ const Analysis = (() => {
   let chart = null;
   let allMeds = [], allEvents = [];
   let windowDays = 0; // 0 = all
+  let predictionTarget = 'score';
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
     medTaken: { label: '💊 补剂种类', checked: true },
@@ -22,11 +23,19 @@ const Analysis = (() => {
     sleepTime: { label: '🕐 睡眠时间因素', checked: false },
     bioMetrics: { label: '📊 生理指标', checked: false },
   };
+  const predictionTargets = {
+    score: { label: '睡眠分数', type: 'ordinal', unit: '分', getValue: r => r.score },
+    hrv: { label: 'HRV', type: 'continuous', unit: 'ms', getValue: r => (r.biometrics || {}).hrv },
+    deepSleepPct: { label: '深睡比例', type: 'continuous', unit: '%', getValue: r => (r.biometrics || {}).deepSleepPct },
+    rhr: { label: '静息心率', type: 'continuous', unit: 'bpm', getValue: r => (r.biometrics || {}).rhr },
+    effectiveSleep: { label: '睡眠时长', type: 'continuous', unit: '小时', getValue: r => r.effectiveSleep },
+  };
 
   async function init() {
     allMeds = await Data.loadMedications();
     allEvents = await Data.loadEvents();
     renderFeatureCheckboxes();
+    renderTargetSelect();
     refresh();
   }
 
@@ -38,6 +47,14 @@ const Analysis = (() => {
         <input type="checkbox" ${g.checked ? 'checked' : ''} onchange="Analysis.toggleGroup('${key}',this)">
         <span>${g.label}</span>
       </label>`
+    ).join('');
+  }
+
+  function renderTargetSelect() {
+    const el = document.getElementById('analysis-target');
+    if (!el) return;
+    el.innerHTML = Object.entries(predictionTargets).map(([key, target]) =>
+      `<option value="${key}" ${key === predictionTarget ? 'selected' : ''}>${target.label}</option>`
     ).join('');
   }
 
@@ -54,6 +71,12 @@ const Analysis = (() => {
     refresh();
   }
 
+  function setTarget(targetKey) {
+    if (!predictionTargets[targetKey]) return;
+    predictionTarget = targetKey;
+    refresh();
+  }
+
   // ========== Main refresh ==========
   function refresh() {
     let records = Data.getRecordsSorted();
@@ -64,6 +87,7 @@ const Analysis = (() => {
       records = records.filter(r => r.date >= cutoffStr);
     }
     const activeGroups = Object.entries(featureGroups).filter(([, g]) => g.checked).map(([k]) => k);
+    const target = predictionTargets[predictionTarget];
 
     if (activeGroups.length === 0) {
       renderEmpty('请至少勾选一个指标组');
@@ -81,6 +105,10 @@ const Analysis = (() => {
     const has = k => activeGroups.includes(k);
     const needsPrev = has('sleepTime');
     const needsBio = has('bioMetrics');
+    const includeCurrentSleep = predictionTarget !== 'effectiveSleep';
+    const includeHrv = predictionTarget !== 'hrv';
+    const includeRhr = predictionTarget !== 'rhr';
+    const includeDeep = predictionTarget !== 'deepSleepPct';
 
     // --- Precompute means for standardization ---
     const medMeanMin = computeMedMeans(records, medIds);
@@ -144,13 +172,20 @@ const Analysis = (() => {
     }
     if (has('sleepTime')) {
       featureNames.push('绝对入睡时间'); featureTypes.push('sleep');
+      if (includeCurrentSleep) { featureNames.push('当日有效睡眠'); featureTypes.push('sleep'); }
       featureNames.push('前日有效睡眠'); featureTypes.push('sleep');
       featureNames.push('前日睡眠评分'); featureTypes.push('sleep');
     }
     if (has('bioMetrics')) {
-      if (bioStats.hrv.count > 0) { featureNames.push('HRV'); featureTypes.push('bio'); }
-      if (bioStats.rhr.count > 0) { featureNames.push('静息心率'); featureTypes.push('bio'); }
-      if (bioStats.deep.count > 0) { featureNames.push('深睡比例'); featureTypes.push('bio'); }
+      if (includeHrv && bioStats.hrv.count > 0) { featureNames.push('HRV'); featureTypes.push('bio'); }
+      if (includeRhr && bioStats.rhr.count > 0) { featureNames.push('静息心率'); featureTypes.push('bio'); }
+      if (includeDeep && bioStats.deep.count > 0) { featureNames.push('深睡比例'); featureTypes.push('bio'); }
+    }
+
+    if (featureNames.length === 0) {
+      renderEmpty('当前预测目标已从回归内容中移除，请再勾选其他指标组');
+      renderStats(null); renderLegend([]);
+      return;
     }
 
     // --- Build X, Y, groups ---
@@ -167,6 +202,9 @@ const Analysis = (() => {
         prevRecord = dateMap[prevDate.toISOString().slice(0, 10)];
         if (!prevRecord) continue;
       }
+
+      const yValue = Number(target.getValue(r));
+      if (!Number.isFinite(yValue)) continue;
 
       const row = [];
       const medMap = {};
@@ -207,35 +245,38 @@ const Analysis = (() => {
         let bedMin = r.bedtime.hour * 60 + r.bedtime.minute;
         if (bedMin < 720) bedMin += 1440;
         row.push((bedMin - meanBed) / sdBed);
-        row.push((r.effectiveSleep - meanSleep) / sdSleep);
+        if (includeCurrentSleep) row.push((r.effectiveSleep - meanSleep) / sdSleep);
         row.push((prevRecord.effectiveSleep - meanSleep) / sdSleep);
         row.push(prevRecord.score / 5 - 1);
       }
       if (has('bioMetrics')) {
         const bio = r.biometrics || {};
-        // Skip record if no bio data at all when bioMetrics is the only active group
-        if (bioStats.hrv.count > 0) row.push(bio.hrv != null ? (bio.hrv - bioStats.hrv.mean) / bioStats.hrv.sd : 0);
-        if (bioStats.rhr.count > 0) row.push(bio.rhr != null ? (bio.rhr - bioStats.rhr.mean) / bioStats.rhr.sd : 0);
-        if (bioStats.deep.count > 0) row.push(bio.deepSleepPct != null ? (bio.deepSleepPct - bioStats.deep.mean) / bioStats.deep.sd : 0);
+        if (includeHrv && bioStats.hrv.count > 0) row.push(bio.hrv != null ? (bio.hrv - bioStats.hrv.mean) / bioStats.hrv.sd : 0);
+        if (includeRhr && bioStats.rhr.count > 0) row.push(bio.rhr != null ? (bio.rhr - bioStats.rhr.mean) / bioStats.rhr.sd : 0);
+        if (includeDeep && bioStats.deep.count > 0) row.push(bio.deepSleepPct != null ? (bio.deepSleepPct - bioStats.deep.mean) / bioStats.deep.sd : 0);
       }
 
-      X.push(row); Y.push(r.score);
+      X.push(row); Y.push(yValue);
       groups.push(new Date(r.date).getDay());
     }
 
     if (X.length < 5) {
-      renderEmpty('有效记录不足 5 条（可能缺少连续日期数据）');
+      renderEmpty(`预测目标“${target.label}”有效记录不足 5 条`);
       renderStats(null); renderLegend([]);
       return;
     }
 
-    const result = fitOrdinalMixed(X, Y, groups);
+    const result = target.type === 'ordinal'
+      ? fitOrdinalMixed(X, Y, groups)
+      : fitLinearRegression(X, Y);
     if (!result) {
       renderEmpty('模型拟合失败 — 数据不足或特征共线');
       renderStats(null); renderLegend([]);
       return;
     }
-    renderChart(featureNames, featureTypes, result.beta, result.oddsRatios, result.randomEffects);
+    result.target = target;
+    result.modelType = target.type;
+    renderChart(featureNames, featureTypes, result.beta, result.oddsRatios, result.randomEffects, result);
     renderStats(result);
     renderLegend(featureTypes);
   }
@@ -411,6 +452,71 @@ const Analysis = (() => {
     return { beta: Array.from(beta), oddsRatios, alpha, sigma2, logLik, aic, pseudoR2, n, p, K, levels, randomEffects, numParams };
   }
 
+  function solveLinearSystem(A, b) {
+    const n = A.length;
+    const M = A.map((row, i) => row.concat(b[i]));
+    for (let col = 0; col < n; col++) {
+      let pivot = col;
+      for (let r = col + 1; r < n; r++) {
+        if (Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot = r;
+      }
+      if (Math.abs(M[pivot][col]) < 1e-12) return null;
+      if (pivot !== col) [M[col], M[pivot]] = [M[pivot], M[col]];
+      const div = M[col][col];
+      for (let c = col; c <= n; c++) M[col][c] /= div;
+      for (let r = 0; r < n; r++) {
+        if (r === col) continue;
+        const factor = M[r][col];
+        for (let c = col; c <= n; c++) M[r][c] -= factor * M[col][c];
+      }
+    }
+    return M.map(row => row[n]);
+  }
+
+  function fitLinearRegression(X, Y) {
+    const n = X.length, p = X[0].length, q = p + 1;
+    if (n < 5 || p < 1) return null;
+    const xtx = Array.from({ length: q }, () => new Array(q).fill(0));
+    const xty = new Array(q).fill(0);
+
+    for (let i = 0; i < n; i++) {
+      const row = [1].concat(X[i]);
+      for (let a = 0; a < q; a++) {
+        xty[a] += row[a] * Y[i];
+        for (let b = 0; b < q; b++) xtx[a][b] += row[a] * row[b];
+      }
+    }
+    for (let j = 1; j < q; j++) xtx[j][j] += 1e-6;
+
+    const coef = solveLinearSystem(xtx, xty);
+    if (!coef) return null;
+
+    const meanY = Y.reduce((s, y) => s + y, 0) / n;
+    let sse = 0, sst = 0;
+    for (let i = 0; i < n; i++) {
+      let pred = coef[0];
+      for (let j = 0; j < p; j++) pred += X[i][j] * coef[j + 1];
+      sse += (Y[i] - pred) ** 2;
+      sst += (Y[i] - meanY) ** 2;
+    }
+
+    const sigma2 = Math.max(sse / n, 1e-9);
+    const logLik = -0.5 * n * (Math.log(2 * Math.PI * sigma2) + 1);
+    const numParams = q + 1;
+    const r2 = sst > 0 ? 1 - sse / sst : 0;
+    return {
+      beta: coef.slice(1),
+      intercept: coef[0],
+      r2,
+      rmse: Math.sqrt(sigma2),
+      logLik,
+      aic: -2 * logLik + 2 * numParams,
+      n,
+      p,
+      numParams,
+    };
+  }
+
   // ========== Rendering ==========
   const TYPE_COLORS = {
     taken: { pos: ['rgba(85,239,196,0.75)', '#55efc4'], neg: ['rgba(225,112,85,0.75)', '#e17055'] },
@@ -426,22 +532,23 @@ const Analysis = (() => {
     return value >= 0 ? c.pos : c.neg;
   }
 
-  function renderChart(featureNames, featureTypes, weights, oddsRatios, randomEffects) {
+  function renderChart(featureNames, featureTypes, weights, oddsRatios, randomEffects, modelInfo) {
     const ctx = document.getElementById('analysis-chart').getContext('2d');
     if (chart) chart.destroy();
+    const isOrdinal = modelInfo.modelType === 'ordinal';
+    const unit = modelInfo.target.unit ? ` ${modelInfo.target.unit}` : '';
     const bgColors = weights.map((w, i) => getColor(featureTypes[i], w)[0]);
     const borderColors = weights.map((w, i) => getColor(featureTypes[i], w)[1]);
 
-    // Build random intercepts subtitle
-    const reTitle = randomEffects
-      .map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`)
-      .join('  ');
+    const titleText = isOrdinal
+      ? `随机截距 ▸ ${randomEffects.map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`).join('  ')}`
+      : `线性回归 ▸ 目标：${modelInfo.target.label} · R² ${(modelInfo.r2 * 100).toFixed(1)}% · RMSE ${modelInfo.rmse.toFixed(2)}${unit}`;
 
     chart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: featureNames,
-        datasets: [{ label: '固定效应系数', data: weights, backgroundColor: bgColors, borderColor: borderColors, borderWidth: 2, borderRadius: 6, borderSkipped: false }]
+        datasets: [{ label: isOrdinal ? '固定效应系数' : '线性回归系数', data: weights, backgroundColor: bgColors, borderColor: borderColors, borderWidth: 2, borderRadius: 6, borderSkipped: false }]
       },
       options: {
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -450,7 +557,7 @@ const Analysis = (() => {
           legend: { display: false },
           title: {
             display: true,
-            text: `随机截距 ▸ ${reTitle}`,
+            text: titleText,
             color: '#5a6480',
             font: { family: 'Inter, Noto Sans SC', size: 11, weight: 500 },
             align: 'start',
@@ -461,8 +568,11 @@ const Analysis = (() => {
             titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' },
             callbacks: {
               label: tip => {
-                const v = tip.parsed.x, or = oddsRatios[tip.dataIndex];
-                return [`系数: ${v >= 0 ? '+' : ''}${v.toFixed(4)}`, `OR: ${or.toFixed(3)}`];
+                const v = tip.parsed.x;
+                const label = `系数: ${v >= 0 ? '+' : ''}${v.toFixed(4)}`;
+                if (!isOrdinal) return [label, `目标: ${modelInfo.target.label}`];
+                const or = oddsRatios[tip.dataIndex];
+                return [label, `OR: ${or.toFixed(3)}`];
               }
             }
           }
@@ -471,7 +581,7 @@ const Analysis = (() => {
           x: {
             grid: { color: c => c.tick.value === 0 ? 'rgba(136,146,168,0.6)' : 'rgba(42,48,80,0.3)' },
             ticks: { color: '#8892a8', font: { family: 'Inter', size: 11 } },
-            title: { display: true, text: '固定效应系数 (log-odds)', color: '#8892a8', font: { family: 'Inter', size: 12 } }
+            title: { display: true, text: isOrdinal ? '固定效应系数 (log-odds)' : `线性回归系数（目标：${modelInfo.target.label}）`, color: '#8892a8', font: { family: 'Inter', size: 12 } }
           },
           y: { grid: { display: false }, ticks: { color: '#e8ecf4', font: { family: 'Inter, Noto Sans SC', size: 12, weight: 500 } } }
         }
@@ -483,11 +593,12 @@ const Analysis = (() => {
           ctx.save();
           data.datasets[0].data.forEach((value, index) => {
             const xPos = x.getPixelForValue(value), yPos = y.getPixelForValue(index);
-            const or = oddsRatios[index], sign = value >= 0 ? '+' : '';
+            const sign = value >= 0 ? '+' : '';
+            const suffix = isOrdinal ? ` (OR ${oddsRatios[index].toFixed(2)})` : '';
             ctx.fillStyle = '#e8ecf4'; ctx.font = '600 11px Inter, sans-serif';
             ctx.textBaseline = 'middle';
             ctx.textAlign = value >= 0 ? 'left' : 'right';
-            ctx.fillText(`${sign}${value.toFixed(3)} (OR ${or.toFixed(2)})`, xPos + (value >= 0 ? 6 : -6), yPos);
+            ctx.fillText(`${sign}${value.toFixed(3)}${suffix}`, xPos + (value >= 0 ? 6 : -6), yPos);
           });
           ctx.restore();
         }
@@ -506,6 +617,17 @@ const Analysis = (() => {
   function renderStats(stats) {
     const el = document.getElementById('analysis-stats');
     if (!stats) { el.innerHTML = ''; return; }
+    if (stats.modelType === 'continuous') {
+      const r2Pct = (stats.r2 * 100).toFixed(1);
+      const r2Color = stats.r2 > 0.3 ? 'var(--accent5)' : stats.r2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
+      const unit = stats.target.unit ? ` ${stats.target.unit}` : '';
+      el.innerHTML = `
+        <div class="stat-card"><span class="stat-label">R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span></div>
+        <div class="stat-card"><span class="stat-label">RMSE</span><span class="stat-value">${stats.rmse.toFixed(2)}</span><span class="stat-desc">${stats.target.label}${unit}</span></div>
+        <div class="stat-card"><span class="stat-label">LL / AIC</span><span class="stat-value">${stats.logLik.toFixed(0)}</span><span class="stat-desc">AIC ${stats.aic.toFixed(0)}</span></div>
+        <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 线性</span></div>`;
+      return;
+    }
     const r2Pct = (stats.pseudoR2 * 100).toFixed(1);
     const r2Color = stats.pseudoR2 > 0.3 ? 'var(--accent5)' : stats.pseudoR2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
     const sigmaB = Math.sqrt(stats.sigma2).toFixed(3);
@@ -529,5 +651,5 @@ const Analysis = (() => {
     }).join('');
   }
 
-  return { init, refresh, toggleGroup, setWindow };
+  return { init, refresh, toggleGroup, setWindow, setTarget };
 })();
