@@ -2,46 +2,75 @@
 /* Model: Cumulative logit (proportional odds) with day-of-week random intercepts
  *   P(Y ≤ j | x, b_g) = sigmoid(α_j − x′β − b_g)
  *   b_g ~ N(0, σ²_b)
- * Estimation: PQL (Penalized Quasi-Likelihood) */
+ * Estimation: PQL (Penalized Quasi-Likelihood)
+ * Two modes: "meds" (medication-only) and "full" (+ sleep features) */
 const Analysis = (() => {
   let chart = null;
   let allMeds = [];
+  let currentMode = 'meds'; // 'meds' or 'full'
 
   async function init() {
     allMeds = await Data.loadMedications();
     refresh();
   }
 
-  function refresh() {
-    const records = Data.getRecordsSorted();
-    if (records.length < 5) {
-      renderEmpty('至少需要 5 条记录才能进行有序回归分析');
-      renderStats(null);
-      return;
-    }
-    const medIds = allMeds.map(m => m.id);
-    if (medIds.length === 0) {
-      renderEmpty('未配置药物信息');
-      renderStats(null);
-      return;
-    }
+  function setMode(mode, btn) {
+    currentMode = mode;
+    document.querySelectorAll('.analysis-mode-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    refresh();
+  }
 
-    // --- Compute mean medication time ---
-    const medTimeSums = {};
-    medIds.forEach(id => { medTimeSums[id] = { totalMin: 0, count: 0 }; });
+  function refresh() {
+    if (currentMode === 'full') refreshFull();
+    else refreshMeds();
+  }
+
+  // ========== Data helpers ==========
+  function computeMedMeans(records, medIds) {
+    const sums = {};
+    medIds.forEach(id => { sums[id] = { totalMin: 0, count: 0 }; });
     records.forEach(r => {
       (r.medications || []).forEach(m => {
-        if (!medTimeSums[m.id]) return;
-        medTimeSums[m.id].totalMin += m.time.hour * 60 + m.time.minute;
-        medTimeSums[m.id].count += 1;
+        if (!sums[m.id]) return;
+        sums[m.id].totalMin += m.time.hour * 60 + m.time.minute;
+        sums[m.id].count += 1;
       });
     });
-    const medMeanMin = {};
+    const means = {};
     medIds.forEach(id => {
-      medMeanMin[id] = medTimeSums[id].count > 0 ? medTimeSums[id].totalMin / medTimeSums[id].count : null;
+      means[id] = sums[id].count > 0 ? sums[id].totalMin / sums[id].count : null;
     });
+    return means;
+  }
 
-    // --- Feature names ---
+  function buildMedFeatures(r, medIds, medMeanMin) {
+    const row = [];
+    const medMap = {};
+    (r.medications || []).forEach(m => { medMap[m.id] = m; });
+    medIds.forEach(id => {
+      const med = medMap[id];
+      if (med) {
+        row.push(1);
+        if (medMeanMin[id] !== null) {
+          let diff = (med.time.hour * 60 + med.time.minute) - medMeanMin[id];
+          if (diff > 720) diff -= 1440;
+          if (diff < -720) diff += 1440;
+          row.push(diff / 60);
+        } else row.push(0);
+      } else { row.push(0); row.push(0); }
+    });
+    return row;
+  }
+
+  // ========== Mode: Medication-only ==========
+  function refreshMeds() {
+    const records = Data.getRecordsSorted();
+    if (records.length < 5) { renderEmpty('至少需要 5 条记录'); renderStats(null); return; }
+    const medIds = allMeds.map(m => m.id);
+    if (medIds.length === 0) { renderEmpty('未配置药物信息'); renderStats(null); return; }
+
+    const medMeanMin = computeMedMeans(records, medIds);
     const featureNames = [], featureTypes = [];
     medIds.forEach(id => {
       const name = (allMeds.find(m => m.id === id) || {}).name || id;
@@ -49,28 +78,99 @@ const Analysis = (() => {
       featureNames.push(`${name} 时间偏移`); featureTypes.push('offset');
     });
 
-    // --- Build X, Y, groups ---
     const X = [], Y = [], groups = [];
     records.forEach(r => {
-      const row = [];
-      const medMap = {};
-      (r.medications || []).forEach(m => { medMap[m.id] = m; });
-      medIds.forEach(id => {
-        const med = medMap[id];
-        if (med) {
-          row.push(1);
-          if (medMeanMin[id] !== null) {
-            let diff = (med.time.hour * 60 + med.time.minute) - medMeanMin[id];
-            if (diff > 720) diff -= 1440;
-            if (diff < -720) diff += 1440;
-            row.push(diff / 60);
-          } else row.push(0);
-        } else { row.push(0); row.push(0); }
-      });
-      X.push(row); Y.push(r.score);
+      X.push(buildMedFeatures(r, medIds, medMeanMin));
+      Y.push(r.score);
       groups.push(new Date(r.date).getDay());
     });
 
+    runModelAndRender(X, Y, groups, featureNames, featureTypes);
+  }
+
+  // ========== Mode: Full (meds + sleep features) ==========
+  function refreshFull() {
+    const records = Data.getRecordsSorted();
+    if (records.length < 6) { renderEmpty('综合分析至少需要 6 条记录（含前一天数据）'); renderStats(null); return; }
+    const medIds = allMeds.map(m => m.id);
+    if (medIds.length === 0) { renderEmpty('未配置药物信息'); renderStats(null); return; }
+
+    const medMeanMin = computeMedMeans(records, medIds);
+
+    // Compute mean effective sleep for standardization
+    let meanSleep = 0;
+    records.forEach(r => { meanSleep += r.effectiveSleep; });
+    meanSleep /= records.length;
+    let sdSleep = 0;
+    records.forEach(r => { sdSleep += (r.effectiveSleep - meanSleep) ** 2; });
+    sdSleep = Math.sqrt(sdSleep / records.length) || 1;
+
+    // Compute mean bedtime (minutes, treating <12:00 as next-day) for standardization
+    let meanBed = 0;
+    records.forEach(r => {
+      let bm = r.bedtime.hour * 60 + r.bedtime.minute;
+      if (bm < 720) bm += 1440; // before noon → treat as after midnight
+      meanBed += bm;
+    });
+    meanBed /= records.length;
+    let sdBed = 0;
+    records.forEach(r => {
+      let bm = r.bedtime.hour * 60 + r.bedtime.minute;
+      if (bm < 720) bm += 1440;
+      sdBed += (bm - meanBed) ** 2;
+    });
+    sdBed = Math.sqrt(sdBed / records.length) || 1;
+
+    // Feature names: med features + sleep features
+    const featureNames = [], featureTypes = [];
+    medIds.forEach(id => {
+      const name = (allMeds.find(m => m.id === id) || {}).name || id;
+      featureNames.push(`${name} 是否服用`); featureTypes.push('taken');
+      featureNames.push(`${name} 时间偏移`); featureTypes.push('offset');
+    });
+    featureNames.push('绝对入睡时间'); featureTypes.push('sleep');
+    featureNames.push('前日有效睡眠'); featureTypes.push('sleep');
+    featureNames.push('前日睡眠评分'); featureTypes.push('sleep');
+
+    // Build dataset — skip first record (no previous day)
+    const X = [], Y = [], groups = [];
+    // Build a date→record map for previous day lookup
+    const dateMap = {};
+    records.forEach(r => { dateMap[r.date] = r; });
+
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      // Find previous day's record
+      const prevDate = new Date(r.date);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const prevKey = prevDate.toISOString().slice(0, 10);
+      const prevRecord = dateMap[prevKey];
+      if (!prevRecord) continue; // skip if no previous day data
+
+      const row = buildMedFeatures(r, medIds, medMeanMin);
+      // Add sleep features (standardized by mean/sd for numerical stability)
+      let bedMin = r.bedtime.hour * 60 + r.bedtime.minute;
+      if (bedMin < 720) bedMin += 1440;
+      row.push((bedMin - meanBed) / sdBed);                        // absolute bedtime
+      row.push((prevRecord.effectiveSleep - meanSleep) / sdSleep); // previous day effective sleep
+      row.push(prevRecord.score / 5 - 1);                          // previous day score (centered around 0)
+
+      X.push(row);
+      Y.push(r.score);
+      groups.push(new Date(r.date).getDay());
+    }
+
+    if (X.length < 5) {
+      renderEmpty('连续日期记录不足 — 需要至少5对连续日期数据');
+      renderStats(null);
+      return;
+    }
+
+    runModelAndRender(X, Y, groups, featureNames, featureTypes);
+  }
+
+  // ========== Shared: fit + render ==========
+  function runModelAndRender(X, Y, groups, featureNames, featureTypes) {
     const result = fitOrdinalMixed(X, Y, groups);
     if (!result) {
       renderEmpty('模型拟合失败 — 数据不足或特征共线');
@@ -88,14 +188,12 @@ const Analysis = (() => {
     return 1 / (1 + Math.exp(-z));
   }
 
-  // P(Y = k | eta) under proportional odds
   function ordProb(k, K, alpha, eta) {
     const upper = k < K - 1 ? sigmoid(alpha[k] - eta) : 1;
     const lower = k > 0 ? sigmoid(alpha[k - 1] - eta) : 0;
     return Math.max(upper - lower, 1e-12);
   }
 
-  // Penalized log-likelihood (includes random effect penalty)
   function penalizedLogLik(X, yIdx, K, alpha, beta, b, gIdx, sigma2) {
     const n = X.length, p = X[0].length;
     let ll = 0;
@@ -104,12 +202,10 @@ const Analysis = (() => {
       for (let j = 0; j < p; j++) eta += X[i][j] * beta[j];
       ll += Math.log(ordProb(yIdx[i], K, alpha, eta));
     }
-    // Random effect penalty: -0.5 * Σ b_g² / σ²
     for (let g = 0; g < b.length; g++) ll -= 0.5 * b[g] * b[g] / Math.max(sigma2, 1e-6);
     return ll;
   }
 
-  // Compute gradients w.r.t. alpha, beta, b
   function computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2) {
     const n = X.length, p = X[0].length, nG = b.length;
     const gAlpha = new Float64Array(K - 1);
@@ -122,29 +218,18 @@ const Analysis = (() => {
       const k = yIdx[i];
       const prob = ordProb(k, K, alpha, eta);
 
-      // Derivatives of cumulative sigmoid at upper and lower thresholds
       let fUpper = 0, fLower = 0;
-      if (k < K - 1) {
-        const s = sigmoid(alpha[k] - eta);
-        fUpper = s * (1 - s);
-      }
-      if (k > 0) {
-        const s = sigmoid(alpha[k - 1] - eta);
-        fLower = s * (1 - s);
-      }
+      if (k < K - 1) { const s = sigmoid(alpha[k] - eta); fUpper = s * (1 - s); }
+      if (k > 0) { const s = sigmoid(alpha[k - 1] - eta); fLower = s * (1 - s); }
 
-      const dEta = (-fUpper + fLower) / prob; // ∂log P / ∂eta
+      const dEta = (-fUpper + fLower) / prob;
       for (let j = 0; j < p; j++) gBeta[j] += dEta * X[i][j];
       gB[gIdx[i]] += dEta;
 
-      // Gradient w.r.t. thresholds
       if (k < K - 1) gAlpha[k] += fUpper / prob;
       if (k > 0) gAlpha[k - 1] -= fLower / prob;
     }
-
-    // Random effect penalty gradient
     for (let g = 0; g < nG; g++) gB[g] -= b[g] / Math.max(sigma2, 1e-6);
-
     return { gAlpha, gBeta, gB };
   }
 
@@ -156,13 +241,11 @@ const Analysis = (() => {
     const yIdx = Y.map(y => levels.indexOf(y));
     const n = X.length, p = X[0].length;
 
-    // Map groups to 0-indexed
     const uGroups = [...new Set(groups)];
     const nG = uGroups.length;
     const gMap = {}; uGroups.forEach((g, i) => { gMap[g] = i; });
     const gIdx = groups.map(g => gMap[g]);
 
-    // Initialize thresholds from empirical proportions
     let alpha = [];
     for (let j = 0; j < K - 1; j++) {
       const cp = yIdx.filter(y => y <= j).length / n;
@@ -172,25 +255,16 @@ const Analysis = (() => {
     let b = new Array(nG).fill(0);
     let sigma2 = 0.5;
 
-    // --- Gradient ascent with adaptive learning rate ---
-    let lr = 0.05;
-    let prevLL = -Infinity;
-
+    let lr = 0.05, prevLL = -Infinity;
     for (let iter = 0; iter < 500; iter++) {
       const { gAlpha, gBeta, gB } = computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2);
-
-      // Update parameters
       const newAlpha = alpha.map((a, j) => a + lr * gAlpha[j]);
       const newBeta = beta.map((bv, j) => bv + lr * gBeta[j]);
       const newB = b.map((bv, g) => bv + lr * gB[g]);
-
-      // Enforce threshold ordering
       for (let j = 1; j < K - 1; j++) {
         if (newAlpha[j] <= newAlpha[j - 1] + 0.01) newAlpha[j] = newAlpha[j - 1] + 0.01;
       }
-
       const newLL = penalizedLogLik(X, yIdx, K, newAlpha, newBeta, newB, gIdx, sigma2);
-
       if (newLL > prevLL) {
         alpha = newAlpha; beta = newBeta; b = newB;
         prevLL = newLL;
@@ -200,41 +274,27 @@ const Analysis = (() => {
         if (lr < 1e-8) break;
         continue;
       }
-
-      // Update σ² every 10 iterations
       if (iter % 10 === 0 && iter > 0) {
         let ss = 0;
         for (let g = 0; g < nG; g++) ss += b[g] * b[g];
         sigma2 = Math.max(ss / nG, 0.01);
       }
-
-      // Convergence check
       if (iter > 20 && Math.abs(gBeta.reduce((s, v) => s + v * v, 0)) < 1e-10) break;
     }
 
-    // --- Compute final log-likelihood (without penalty for reporting) ---
     let logLik = 0;
     for (let i = 0; i < n; i++) {
       let eta = b[gIdx[i]];
       for (let j = 0; j < p; j++) eta += X[i][j] * beta[j];
       logLik += Math.log(ordProb(yIdx[i], K, alpha, eta));
     }
-
-    // AIC: -2*ll + 2*numParams  (thresholds + betas + sigma2)
     const numParams = (K - 1) + p + 1;
     const aic = -2 * logLik + 2 * numParams;
-
-    // Odds ratios: exp(β)
     const oddsRatios = beta.map(b => Math.exp(b));
-
-    // McFadden pseudo-R²: 1 - ll_model / ll_null
     let llNull = 0;
-    for (let i = 0; i < n; i++) {
-      llNull += Math.log(ordProb(yIdx[i], K, alpha, 0));
-    }
+    for (let i = 0; i < n; i++) llNull += Math.log(ordProb(yIdx[i], K, alpha, 0));
     const pseudoR2 = 1 - logLik / llNull;
 
-    // Day-of-week labels
     const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
     const randomEffects = uGroups.map((g, i) => ({ day: dayLabels[g], value: b[i] }));
 
@@ -250,14 +310,13 @@ const Analysis = (() => {
     const ctx = document.getElementById('analysis-chart').getContext('2d');
     if (chart) chart.destroy();
 
-    const bgColors = weights.map((w, i) => {
-      if (featureTypes[i] === 'taken') return w >= 0 ? 'rgba(85,239,196,0.75)' : 'rgba(225,112,85,0.75)';
-      return w >= 0 ? 'rgba(116,185,255,0.75)' : 'rgba(253,203,110,0.75)';
-    });
-    const borderColors = weights.map((w, i) => {
-      if (featureTypes[i] === 'taken') return w >= 0 ? '#55efc4' : '#e17055';
-      return w >= 0 ? '#74b9ff' : '#fdcb6e';
-    });
+    const colorMap = {
+      taken:  w => w >= 0 ? ['rgba(85,239,196,0.75)', '#55efc4'] : ['rgba(225,112,85,0.75)', '#e17055'],
+      offset: w => w >= 0 ? ['rgba(116,185,255,0.75)', '#74b9ff'] : ['rgba(253,203,110,0.75)', '#fdcb6e'],
+      sleep:  w => w >= 0 ? ['rgba(162,155,254,0.75)', '#a29bfe'] : ['rgba(255,234,167,0.75)', '#ffeaa7'],
+    };
+    const bgColors = weights.map((w, i) => (colorMap[featureTypes[i]] || colorMap.sleep)(w)[0]);
+    const borderColors = weights.map((w, i) => (colorMap[featureTypes[i]] || colorMap.sleep)(w)[1]);
 
     chart = new Chart(ctx, {
       type: 'bar',
@@ -343,8 +402,6 @@ const Analysis = (() => {
     const r2Pct = (stats.pseudoR2 * 100).toFixed(1);
     const r2Color = stats.pseudoR2 > 0.3 ? 'var(--accent5)' : stats.pseudoR2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
     const sigmaB = Math.sqrt(stats.sigma2).toFixed(3);
-
-    // Random effects summary
     const reHtml = stats.randomEffects
       .map(re => `<span class="re-chip" style="opacity:${0.5 + Math.min(Math.abs(re.value), 1) * 0.5}">周${re.day} <em>${re.value >= 0 ? '+' : ''}${re.value.toFixed(3)}</em></span>`)
       .join('');
@@ -377,5 +434,5 @@ const Analysis = (() => {
     `;
   }
 
-  return { init, refresh };
+  return { init, refresh, setMode };
 })();

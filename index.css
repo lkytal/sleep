@@ -538,6 +538,30 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 }
 
 /* ===== Analysis Page ===== */
+.analysis-mode-selector {
+  display: flex;
+  gap: 4px;
+}
+.analysis-mode-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font: 500 0.85rem var(--font);
+  padding: 0.4rem 1.1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.analysis-mode-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.analysis-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
 .analysis-desc {
   color: var(--text-secondary);
   font-size: 0.92rem;
