@@ -4,7 +4,7 @@
  *   b_g ~ N(0, σ²_b), when weekday random intercepts are enabled
  * Feature groups selectable via checkboxes:
  *   - medTaken: supplement taken (0/1)
- *   - medTime:  supplement time offset (hours from mean)
+ *   - medTime:  supplement time offset from bedtime (standardized hours)
  *   - medDose:  supplement dose (standardized)
  *   - events:   sleep events (0/1 per event type)
  *   - sleepTime: bedtime, durations, prev-day features
@@ -15,11 +15,13 @@ const Analysis = (() => {
   let windowDays = 0; // 0 = all
   let predictionTarget = 'score';
   let useWeekdayRandomIntercept = false;
+  let useCoefficientRegularization = false;
+  const REGULARIZATION_LAMBDA = 0.5;
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
     medTaken: { label: '💊 补剂种类', checked: true },
     medTime: { label: '⏰ 补剂时间', checked: true },
-    medDose: { label: '💉 补剂剂量', checked: false },
+    medDose: { label: '💉 补剂剂量', checked: true },
     events: { label: '📝 睡眠事件', checked: false },
     sleepTime: { label: '🕐 睡眠时间因素', checked: false },
     bioMetrics: { label: '📊 生理指标', checked: false },
@@ -53,7 +55,11 @@ const Analysis = (() => {
         <input type="checkbox" ${useWeekdayRandomIntercept ? 'checked' : ''} onchange="Analysis.toggleWeekdayRandom(this)">
         <span>📅 星期随机截距</span>
       </label>`;
-    el.innerHTML = featureChips + weekdayChip;
+    const regularizationChip = `<label class="af-chip${useCoefficientRegularization ? ' checked' : ''}">
+        <input type="checkbox" ${useCoefficientRegularization ? 'checked' : ''} onchange="Analysis.toggleRegularization(this)">
+        <span>📉 系数正则化</span>
+      </label>`;
+    el.innerHTML = featureChips + weekdayChip + regularizationChip;
   }
 
   function renderTargetSelect() {
@@ -72,6 +78,12 @@ const Analysis = (() => {
 
   function toggleWeekdayRandom(cb) {
     useWeekdayRandomIntercept = cb.checked;
+    cb.parentElement.classList.toggle('checked', cb.checked);
+    refresh();
+  }
+
+  function toggleRegularization(cb) {
+    useCoefficientRegularization = cb.checked;
     cb.parentElement.classList.toggle('checked', cb.checked);
     refresh();
   }
@@ -123,7 +135,7 @@ const Analysis = (() => {
     const includeDeep = predictionTarget !== 'deepSleepPct';
 
     // --- Precompute means for standardization ---
-    const medMeanMin = computeMedMeans(records, medIds);
+    const medTimeStats = computeMedTimeStats(records, medIds);
     const medMeanDose = computeMedMeanDose(records, medIds);
 
     // Bio metrics stats (z-score)
@@ -140,18 +152,12 @@ const Analysis = (() => {
       meanSleep = s1 / records.length;
       records.forEach(r => { s2 += (r.effectiveSleep - meanSleep) ** 2; });
       sdSleep = Math.sqrt(s2 / records.length) || 1;
-      // bedtime stats
-      let b1 = 0, b2 = 0;
+      // bedtime stats use circular differences so midnight does not split nearby times.
+      const bedMinutes = records.map(r => timeToMinutes(r.bedtime));
+      meanBed = circularMeanMinutes(bedMinutes);
+      let b2 = 0;
       records.forEach(r => {
-        let bm = r.bedtime.hour * 60 + r.bedtime.minute;
-        if (bm < 720) bm += 1440;
-        b1 += bm;
-      });
-      meanBed = b1 / records.length;
-      records.forEach(r => {
-        let bm = r.bedtime.hour * 60 + r.bedtime.minute;
-        if (bm < 720) bm += 1440;
-        b2 += (bm - meanBed) ** 2;
+        b2 += circularMinuteDiff(timeToMinutes(r.bedtime), meanBed) ** 2;
       });
       sdBed = Math.sqrt(b2 / records.length) || 1;
     }
@@ -167,7 +173,7 @@ const Analysis = (() => {
     if (has('medTime')) {
       medIds.forEach(id => {
         const name = (allMeds.find(m => m.id === id) || {}).name || id;
-        featureNames.push(`${name} 时间偏移`); featureTypes.push('offset');
+        featureNames.push(`${name} 相对入睡时间`); featureTypes.push('offset');
       });
     }
     if (has('medDose')) {
@@ -184,7 +190,9 @@ const Analysis = (() => {
     }
     if (has('sleepTime')) {
       featureNames.push('绝对入睡时间'); featureTypes.push('sleep');
-      if (includeCurrentSleep) { featureNames.push('当日有效睡眠'); featureTypes.push('sleep'); }
+      // if (includeCurrentSleep) {
+      //   featureNames.push('当日有效睡眠'); featureTypes.push('sleep');
+      // }
       featureNames.push('前日有效睡眠'); featureTypes.push('sleep');
       featureNames.push('前日睡眠评分'); featureTypes.push('sleep');
     }
@@ -228,11 +236,9 @@ const Analysis = (() => {
       if (has('medTime')) {
         medIds.forEach(id => {
           const med = medMap[id];
-          if (med && medMeanMin[id] !== null) {
-            let diff = (med.time.hour * 60 + med.time.minute) - medMeanMin[id];
-            if (diff > 720) diff -= 1440;
-            if (diff < -720) diff += 1440;
-            row.push(diff / 60);
+          if (med && medTimeStats[id]) {
+            const offsetHours = medicationBedtimeOffsetHours(med, r);
+            row.push(Number.isFinite(offsetHours) ? (offsetHours - medTimeStats[id].mean) / medTimeStats[id].sd : 0);
           } else {
             row.push(0);
           }
@@ -254,9 +260,7 @@ const Analysis = (() => {
         eventIds.forEach(id => row.push(evSet.has(id) ? 1 : 0));
       }
       if (has('sleepTime')) {
-        let bedMin = r.bedtime.hour * 60 + r.bedtime.minute;
-        if (bedMin < 720) bedMin += 1440;
-        row.push((bedMin - meanBed) / sdBed);
+        row.push(circularMinuteDiff(timeToMinutes(r.bedtime), meanBed) / sdBed);
         if (includeCurrentSleep) row.push((r.effectiveSleep - meanSleep) / sdSleep);
         row.push((prevRecord.effectiveSleep - meanSleep) / sdSleep);
         row.push(prevRecord.score / 5 - 1);
@@ -277,10 +281,19 @@ const Analysis = (() => {
       renderStats(null); renderLegend([]);
       return;
     }
+    if (X.some(row => row.length !== featureNames.length)) {
+      renderEmpty('模型特征维度不一致，请检查指标组合');
+      renderStats(null); renderLegend([]);
+      return;
+    }
 
+    const regularization = {
+      enabled: useCoefficientRegularization,
+      lambda: useCoefficientRegularization ? REGULARIZATION_LAMBDA : 1e-6,
+    };
     const result = target.type === 'ordinal'
-      ? fitOrdinalMixed(X, Y, groups, useWeekdayRandomIntercept)
-      : fitLinearRegression(X, Y);
+      ? fitOrdinalMixed(X, Y, groups, useWeekdayRandomIntercept, regularization)
+      : fitLinearRegression(X, Y, regularization);
     if (!result) {
       renderEmpty('模型拟合失败 — 数据不足或特征共线');
       renderStats(null); renderLegend([]);
@@ -288,27 +301,63 @@ const Analysis = (() => {
     }
     result.target = target;
     result.modelType = target.type;
+    result.regularization = regularization;
     renderChart(featureNames, featureTypes, result.beta, result.oddsRatios, result.randomEffects, result);
     renderStats(result);
     renderLegend(featureTypes);
   }
 
   // ========== Data helpers ==========
-  function computeMedMeans(records, medIds) {
-    const sums = {};
-    medIds.forEach(id => { sums[id] = { totalMin: 0, count: 0 }; });
+  function timeToMinutes(time) {
+    if (!time) return NaN;
+    return time.hour * 60 + time.minute;
+  }
+
+  function circularMinuteDiff(valueMin, centerMin) {
+    let diff = valueMin - centerMin;
+    if (diff > 720) diff -= 1440;
+    if (diff < -720) diff += 1440;
+    return diff;
+  }
+
+  function circularMeanMinutes(values) {
+    if (values.length === 0) return 0;
+    let sinSum = 0, cosSum = 0;
+    values.forEach(min => {
+      const radians = (min / 1440) * 2 * Math.PI;
+      sinSum += Math.sin(radians);
+      cosSum += Math.cos(radians);
+    });
+    const angle = Math.atan2(sinSum / values.length, cosSum / values.length);
+    return ((angle < 0 ? angle + 2 * Math.PI : angle) / (2 * Math.PI)) * 1440;
+  }
+
+  function medicationBedtimeOffsetHours(med, record) {
+    const medMin = timeToMinutes(med.time);
+    const bedMin = timeToMinutes(record.bedtime);
+    if (!Number.isFinite(medMin) || !Number.isFinite(bedMin)) return NaN;
+    return circularMinuteDiff(medMin, bedMin) / 60;
+  }
+
+  function computeMedTimeStats(records, medIds) {
+    const acc = {};
+    medIds.forEach(id => { acc[id] = { vals: [] }; });
     records.forEach(r => {
       (r.medications || []).forEach(m => {
-        if (!sums[m.id]) return;
-        sums[m.id].totalMin += m.time.hour * 60 + m.time.minute;
-        sums[m.id].count += 1;
+        if (!acc[m.id]) return;
+        const offsetHours = medicationBedtimeOffsetHours(m, r);
+        if (Number.isFinite(offsetHours)) acc[m.id].vals.push(offsetHours);
       });
     });
-    const means = {};
+    const result = {};
     medIds.forEach(id => {
-      means[id] = sums[id].count > 0 ? sums[id].totalMin / sums[id].count : null;
+      const v = acc[id].vals;
+      if (v.length === 0) { result[id] = null; return; }
+      const mean = v.reduce((s, x) => s + x, 0) / v.length;
+      const sd = Math.sqrt(v.reduce((s, x) => s + (x - mean) ** 2, 0) / v.length) || 1;
+      result[id] = { mean, sd };
     });
-    return means;
+    return result;
   }
 
   function parseDoseValue(doseStr) {
@@ -368,7 +417,7 @@ const Analysis = (() => {
     return Math.max(upper - lower, 1e-12);
   }
 
-  function penalizedLogLik(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept) {
+  function penalizedLogLik(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept, ridgeLambda) {
     const n = X.length, p = X[0].length;
     let ll = 0;
     for (let i = 0; i < n; i++) {
@@ -379,10 +428,13 @@ const Analysis = (() => {
     if (useRandomIntercept) {
       for (let g = 0; g < b.length; g++) ll -= 0.5 * b[g] * b[g] / Math.max(sigma2, 1e-6);
     }
+    if (ridgeLambda > 0) {
+      for (let j = 0; j < p; j++) ll -= 0.5 * ridgeLambda * beta[j] * beta[j];
+    }
     return ll;
   }
 
-  function computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept) {
+  function computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept, ridgeLambda) {
     const n = X.length, p = X[0].length, nG = b.length;
     const gAlpha = new Float64Array(K - 1);
     const gBeta = new Float64Array(p);
@@ -404,11 +456,14 @@ const Analysis = (() => {
     if (useRandomIntercept) {
       for (let g = 0; g < nG; g++) gB[g] -= b[g] / Math.max(sigma2, 1e-6);
     }
+    if (ridgeLambda > 0) {
+      for (let j = 0; j < p; j++) gBeta[j] -= ridgeLambda * beta[j];
+    }
     return { gAlpha, gBeta, gB };
   }
 
   // ========== Model fitting ==========
-  function fitOrdinalMixed(X, Y, groups, useRandomIntercept) {
+  function fitOrdinalMixed(X, Y, groups, useRandomIntercept, regularization) {
     const levels = [...new Set(Y)].sort((a, b) => a - b);
     const K = levels.length;
     if (K < 2) return null;
@@ -427,16 +482,17 @@ const Analysis = (() => {
     let beta = new Array(p).fill(0);
     let b = new Array(nG).fill(0);
     let sigma2 = 0.5, lr = 0.05, prevLL = -Infinity;
+    const ridgeLambda = regularization.lambda;
 
     for (let iter = 0; iter < 500; iter++) {
-      const { gAlpha, gBeta, gB } = computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept);
+      const { gAlpha, gBeta, gB } = computeGradients(X, yIdx, K, alpha, beta, b, gIdx, sigma2, useRandomIntercept, ridgeLambda);
       const newAlpha = alpha.map((a, j) => a + lr * gAlpha[j]);
       const newBeta = beta.map((bv, j) => bv + lr * gBeta[j]);
       const newB = useRandomIntercept ? b.map((bv, g) => bv + lr * gB[g]) : [];
       for (let j = 1; j < K - 1; j++) {
         if (newAlpha[j] <= newAlpha[j - 1] + 0.01) newAlpha[j] = newAlpha[j - 1] + 0.01;
       }
-      const newLL = penalizedLogLik(X, yIdx, K, newAlpha, newBeta, newB, gIdx, sigma2, useRandomIntercept);
+      const newLL = penalizedLogLik(X, yIdx, K, newAlpha, newBeta, newB, gIdx, sigma2, useRandomIntercept, ridgeLambda);
       if (newLL > prevLL) {
         alpha = newAlpha; beta = newBeta; b = newB;
         prevLL = newLL; lr = Math.min(lr * 1.05, 0.2);
@@ -489,7 +545,7 @@ const Analysis = (() => {
     return M.map(row => row[n]);
   }
 
-  function fitLinearRegression(X, Y) {
+  function fitLinearRegression(X, Y, regularization) {
     const n = X.length, p = X[0].length, q = p + 1;
     if (n < 5 || p < 1) return null;
     const xtx = Array.from({ length: q }, () => new Array(q).fill(0));
@@ -502,7 +558,7 @@ const Analysis = (() => {
         for (let b = 0; b < q; b++) xtx[a][b] += row[a] * row[b];
       }
     }
-    for (let j = 1; j < q; j++) xtx[j][j] += 1e-6;
+    for (let j = 1; j < q; j++) xtx[j][j] += regularization.lambda;
 
     const coef = solveLinearSystem(xtx, xty);
     if (!coef) return null;
@@ -555,12 +611,13 @@ const Analysis = (() => {
     const unit = modelInfo.target.unit ? ` ${modelInfo.target.unit}` : '';
     const bgColors = weights.map((w, i) => getColor(featureTypes[i], w)[0]);
     const borderColors = weights.map((w, i) => getColor(featureTypes[i], w)[1]);
+    const ridgeText = modelInfo.regularization.enabled ? `Ridge λ=${modelInfo.regularization.lambda}` : '无系数正则化';
 
     const titleText = isOrdinal
       ? (modelInfo.useRandomIntercept
-        ? `随机截距 ▸ ${randomEffects.map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`).join('  ')}`
-        : '累积Logit ▸ 未使用星期随机截距')
-      : `线性回归 ▸ 目标：${modelInfo.target.label} · R² ${(modelInfo.r2 * 100).toFixed(1)}% · RMSE ${modelInfo.rmse.toFixed(2)}${unit}`;
+        ? `随机截距 ▸ ${ridgeText} ▸ ${randomEffects.map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`).join('  ')}`
+        : `累积Logit ▸ 未使用星期随机截距 ▸ ${ridgeText}`)
+      : `线性回归 ▸ ${ridgeText} ▸ 目标：${modelInfo.target.label} · R² ${(modelInfo.r2 * 100).toFixed(1)}% · RMSE ${modelInfo.rmse.toFixed(2)}${unit}`;
 
     chart = new Chart(ctx, {
       type: 'bar',
@@ -635,6 +692,7 @@ const Analysis = (() => {
   function renderStats(stats) {
     const el = document.getElementById('analysis-stats');
     if (!stats) { el.innerHTML = ''; return; }
+    const ridgeDesc = stats.regularization.enabled ? `Ridge λ=${stats.regularization.lambda}` : '无Ridge';
     if (stats.modelType === 'continuous') {
       const r2Pct = (stats.r2 * 100).toFixed(1);
       const r2Color = stats.r2 > 0.3 ? 'var(--accent5)' : stats.r2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
@@ -643,7 +701,7 @@ const Analysis = (() => {
         <div class="stat-card"><span class="stat-label">R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span></div>
         <div class="stat-card"><span class="stat-label">RMSE</span><span class="stat-value">${stats.rmse.toFixed(2)}</span><span class="stat-desc">${stats.target.label}${unit}</span></div>
         <div class="stat-card"><span class="stat-label">LL / AIC</span><span class="stat-value">${stats.logLik.toFixed(0)}</span><span class="stat-desc">AIC ${stats.aic.toFixed(0)}</span></div>
-        <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 线性</span></div>`;
+        <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 ${ridgeDesc}</span></div>`;
       return;
     }
     const r2Pct = (stats.pseudoR2 * 100).toFixed(1);
@@ -656,7 +714,7 @@ const Analysis = (() => {
       <div class="stat-card"><span class="stat-label">R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span></div>
       <div class="stat-card"><span class="stat-label">LL / AIC</span><span class="stat-value">${stats.logLik.toFixed(0)}</span><span class="stat-desc">AIC ${stats.aic.toFixed(0)}</span></div>
       ${interceptCard}
-      <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 ${stats.K}级</span></div>`;
+      <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 ${stats.K}级 ${ridgeDesc}</span></div>`;
   }
 
   function renderLegend(featureTypes) {
@@ -672,5 +730,5 @@ const Analysis = (() => {
     }).join('');
   }
 
-  return { init, refresh, toggleGroup, toggleWeekdayRandom, setWindow, setTarget };
+  return { init, refresh, toggleGroup, toggleWeekdayRandom, toggleRegularization, setWindow, setTarget };
 })();
