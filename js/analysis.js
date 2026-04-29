@@ -19,8 +19,6 @@ const Analysis = (() => {
   let windowDays = 0; // 0 = all
   let predictionTarget = 'score';
   let useWeekdayRandomIntercept = false;
-  let useCoefficientRegularization = false;
-  const REGULARIZATION_LAMBDA = 0.5;
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
     medTaken: { label: '💊 补剂种类', checked: true },
@@ -59,11 +57,7 @@ const Analysis = (() => {
         <input type="checkbox" ${useWeekdayRandomIntercept ? 'checked' : ''} onchange="Analysis.toggleWeekdayRandom(this)">
         <span>📅 星期随机截距</span>
       </label>`;
-    const regularizationChip = `<label class="af-chip${useCoefficientRegularization ? ' checked' : ''}">
-        <input type="checkbox" ${useCoefficientRegularization ? 'checked' : ''} onchange="Analysis.toggleRegularization(this)">
-        <span>📉 系数正则化</span>
-      </label>`;
-    el.innerHTML = featureChips + weekdayChip + regularizationChip;
+    el.innerHTML = featureChips + weekdayChip;
   }
 
   function renderTargetSelect() {
@@ -82,12 +76,6 @@ const Analysis = (() => {
 
   function toggleWeekdayRandom(cb) {
     useWeekdayRandomIntercept = cb.checked;
-    cb.parentElement.classList.toggle('checked', cb.checked);
-    refresh();
-  }
-
-  function toggleRegularization(cb) {
-    useCoefficientRegularization = cb.checked;
     cb.parentElement.classList.toggle('checked', cb.checked);
     refresh();
   }
@@ -133,7 +121,6 @@ const Analysis = (() => {
     const has = k => activeGroups.includes(k);
     const needsPrev = has('sleepTime');
     const needsBio = has('bioMetrics');
-    const includeCurrentSleep = predictionTarget !== 'effectiveSleep';
     const includeHrv = predictionTarget !== 'hrv';
     const includeRhr = predictionTarget !== 'rhr';
     const includeDeep = predictionTarget !== 'deepSleepPct';
@@ -195,9 +182,6 @@ const Analysis = (() => {
     }
     if (has('sleepTime')) {
       featureNames.push('绝对入睡时间'); featureTypes.push('sleep');
-      if (includeCurrentSleep) {
-        featureNames.push('当日有效睡眠'); featureTypes.push('sleep');
-      }
       featureNames.push('前日有效睡眠'); featureTypes.push('sleep');
       featureNames.push('前日睡眠评分'); featureTypes.push('sleep');
     }
@@ -266,7 +250,6 @@ const Analysis = (() => {
       }
       if (has('sleepTime')) {
         row.push(circularMinuteDiff(timeToMinutes(r.bedtime), meanBed) / sdBed);
-        if (includeCurrentSleep) row.push((r.effectiveSleep - meanSleep) / sdSleep);
         row.push((prevRecord.effectiveSleep - meanSleep) / sdSleep);
         row.push(prevRecord.score / 5 - 1);
       }
@@ -324,10 +307,9 @@ const Analysis = (() => {
       renderStats(null); renderLegend([]);
       return;
     }
-
     const regularization = {
-      enabled: useCoefficientRegularization,
-      lambda: useCoefficientRegularization ? REGULARIZATION_LAMBDA : 1e-6,
+      enabled: false,
+      lambda: 1e-6,
     };
     const result = target.type === 'ordinal'
       ? fitOrdinalMixed(X, Y, groups, useWeekdayRandomIntercept, regularization)
@@ -639,11 +621,11 @@ const Analysis = (() => {
     const numTheta = 1 + dDim + p + nG;
     const mAdam = new Float64Array(numTheta);
     const vAdam = new Float64Array(numTheta);
-    const adamLR = 0.08, adamB1 = 0.9, adamB2 = 0.999, adamEps = 1e-8;
+    const adamLR = 0.01, adamB1 = 0.9, adamB2 = 0.999, adamEps = 1e-8;
 
     let prevLL = -Infinity;
     let converged = false;
-    const maxIter = 1000000;
+    const maxIter = 100000;
     const checkEvery = 10;
     let iterUsed = 0;
 
@@ -899,7 +881,7 @@ const Analysis = (() => {
     dose: { pos: ['rgba(0,206,201,0.75)', '#00cec9'], neg: ['rgba(214,48,49,0.65)', '#d63031'] },
     event: { pos: ['rgba(253,121,168,0.75)', '#fd79a8'], neg: ['rgba(99,110,114,0.65)', '#636e72'] },
     sleep: { pos: ['rgba(162,155,254,0.75)', '#a29bfe'], neg: ['rgba(255,234,167,0.75)', '#ffeaa7'] },
-    bio:   { pos: ['rgba(129,236,236,0.75)', '#81ecec'], neg: ['rgba(255,118,117,0.75)', '#ff7675'] },
+    bio: { pos: ['rgba(129,236,236,0.75)', '#81ecec'], neg: ['rgba(255,118,117,0.75)', '#ff7675'] },
   };
 
   function getColor(type, value) {
@@ -1098,6 +1080,5 @@ const Analysis = (() => {
               <div class="legend-item"><span class="legend-dot" style="background:${c.neg[1]}"></span>${labels[t] || t} (负)</div>`;
     }).join('');
   }
-
-  return { init, refresh, toggleGroup, toggleWeekdayRandom, toggleRegularization, setWindow, setTarget };
+  return { init, refresh, toggleGroup, toggleWeekdayRandom, setWindow, setTarget };
 })();
