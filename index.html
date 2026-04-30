@@ -19,6 +19,10 @@
       <button id="nav-record" class="nav-tab" onclick="Record.open()">+ 新记录</button>
     </div>
     <div class="nav-actions">
+      <button id="btn-switch-user" class="nav-btn nav-user-btn" onclick="App.switchUser()" title="切换用户">
+        <span class="nav-user-icon">👤</span>
+        <span id="current-user-name" class="nav-user-name">—</span>
+      </button>
       <button id="btn-import" class="nav-btn" onclick="Data.importData()">导入</button>
       <button id="btn-export" class="nav-btn" onclick="Data.exportData()">导出</button>
     </div>
@@ -172,6 +176,21 @@
         </div>
         <div class="record-actions">
           <button id="btn-save" class="btn-primary" onclick="Record.save()">保存记录</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- User Selection Modal -->
+  <div id="user-modal" class="modal-overlay user-modal-overlay" onclick="App.handleUserModalOverlay(event)">
+    <div class="modal-content user-modal-content">
+      <div class="modal-header">
+        <h2>👤 选择用户</h2>
+      </div>
+      <div class="modal-body user-modal-body">
+        <div class="user-list" id="user-list"></div>
+        <div class="user-create-row">
+          <input type="text" id="new-user-name" class="user-input" placeholder="输入新用户名…" maxlength="30" onkeydown="App.handleNewUserKeydown(event)">
+          <button class="btn-primary user-create-btn" onclick="App.createNewUser()">创建用户</button>
         </div>
       </div>
     </div>

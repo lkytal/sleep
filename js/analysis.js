@@ -109,6 +109,7 @@ const Analysis = (() => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: Data.getUserId(),
           windowDays,
           activeGroups,
           predictionTarget,
