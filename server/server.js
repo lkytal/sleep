@@ -185,5 +185,6 @@ app.post('/api/analysis', (req, res) => {
   res.json(result);
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Sleep tracker backend running on http://localhost:${PORT}`));
+const PORT = process.env.PORT || 4001;
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => console.log(`Sleep tracker backend running on all interfaces at port ${PORT}`));
