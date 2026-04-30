@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Runtime data / persistent storage
+data/
+*.json
+!package.json
+!package-lock.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

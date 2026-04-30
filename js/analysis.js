@@ -93,239 +93,44 @@ const Analysis = (() => {
     refresh();
   }
 
-  // ========== Main refresh ==========
-  function refresh() {
-    let records = Data.getRecordsSorted();
-    if (windowDays > 0) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - windowDays);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
-      records = records.filter(r => r.date >= cutoffStr);
-    }
+  // ========== Main refresh — delegates computation to backend ==========
+  async function refresh() {
     const activeGroups = Object.entries(featureGroups).filter(([, g]) => g.checked).map(([k]) => k);
-    const target = predictionTargets[predictionTarget];
 
     if (activeGroups.length === 0) {
       renderEmpty('请至少勾选一个指标组');
       renderStats(null); renderLegend([]);
       return;
     }
-    if (records.length < 5) {
-      renderEmpty('至少需要 5 条记录才能进行回归分析');
-      renderStats(null); renderLegend([]);
-      return;
-    }
 
-    const medIds = allMeds.map(m => m.id);
-    const eventIds = allEvents.map(e => e.id);
-    const has = k => activeGroups.includes(k);
-    const needsPrev = has('sleepTime');
-    const needsBio = has('bioMetrics');
-    const includeHrv = predictionTarget !== 'hrv';
-    const includeRhr = predictionTarget !== 'rhr';
-    const includeDeep = predictionTarget !== 'deepSleepPct';
-
-    // --- Precompute means for standardization ---
-    const medTimeStats = computeMedTimeStats(records, medIds);
-    const medMeanDose = computeMedMeanDose(records, medIds);
-
-    // Bio metrics stats (z-score)
-    let bioStats = { hrv: {}, rhr: {}, deep: {} };
-    if (needsBio) {
-      bioStats = computeBioStats(records);
-    }
-
-    let meanSleep = 0, sdSleep = 1, meanBed = 0, sdBed = 1;
-    if (needsPrev) {
-      // Sample (n-1) variance is used everywhere below to avoid systematically
-      // underestimating spread on the small samples typical for this app.
-      let s1 = 0, s2 = 0;
-      records.forEach(r => { s1 += r.effectiveSleep; });
-      meanSleep = s1 / records.length;
-      records.forEach(r => { s2 += (r.effectiveSleep - meanSleep) ** 2; });
-      sdSleep = Math.sqrt(s2 / Math.max(records.length - 1, 1)) || 1;
-      // Bedtime uses circular differences so midnight does not split nearby times.
-      const bedMinutes = records.map(r => timeToMinutes(r.bedtime));
-      meanBed = circularMeanMinutes(bedMinutes);
-      let b2 = 0;
-      records.forEach(r => {
-        b2 += circularMinuteDiff(timeToMinutes(r.bedtime), meanBed) ** 2;
+    renderEmpty('计算中…');
+    try {
+      const res = await fetch('http://localhost:3001/api/analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          windowDays,
+          activeGroups,
+          predictionTarget,
+          useWeekdayRandomIntercept,
+        }),
       });
-      sdBed = Math.sqrt(b2 / Math.max(records.length - 1, 1)) || 1;
-    }
-
-    // --- Build feature names & types ---
-    const featureNames = [], featureTypes = [];
-    if (has('medTaken')) {
-      medIds.forEach(id => {
-        const name = (allMeds.find(m => m.id === id) || {}).name || id;
-        featureNames.push(`${name} 服用`); featureTypes.push('taken');
-      });
-    }
-    if (has('medTime')) {
-      medIds.forEach(id => {
-        const name = (allMeds.find(m => m.id === id) || {}).name || id;
-        featureNames.push(`${name} 相对入睡时间`); featureTypes.push('offset');
-      });
-    }
-    if (has('medDose')) {
-      medIds.forEach(id => {
-        const name = (allMeds.find(m => m.id === id) || {}).name || id;
-        featureNames.push(`${name} 剂量`); featureTypes.push('dose');
-      });
-    }
-    if (has('events')) {
-      eventIds.forEach(id => {
-        const name = (allEvents.find(e => e.id === id) || {}).name || id;
-        featureNames.push(name); featureTypes.push('event');
-      });
-    }
-    if (has('sleepTime')) {
-      featureNames.push('绝对入睡时间'); featureTypes.push('sleep');
-      featureNames.push('前日有效睡眠'); featureTypes.push('sleep');
-      featureNames.push('前日睡眠评分'); featureTypes.push('sleep');
-    }
-    if (has('bioMetrics')) {
-      if (includeHrv && bioStats.hrv.count > 0) { featureNames.push('HRV'); featureTypes.push('bio'); }
-      if (includeRhr && bioStats.rhr.count > 0) { featureNames.push('静息心率'); featureTypes.push('bio'); }
-      if (includeDeep && bioStats.deep.count > 0) { featureNames.push('深睡比例'); featureTypes.push('bio'); }
-    }
-
-    if (featureNames.length === 0) {
-      renderEmpty('当前预测目标已从回归内容中移除，请再勾选其他指标组');
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        renderEmpty(data.error || '分析请求失败');
+        renderStats(null); renderLegend([]);
+        return;
+      }
+      // Reconstruct target object for rendering (labels/units)
+      data.target = predictionTargets[data.targetKey] || predictionTargets[predictionTarget];
+      data.modelType = data.targetType;
+      renderChart(data.featureNames, data.featureTypes, data.beta, data.oddsRatios, data.randomEffects, data);
+      renderStats(data);
+      renderLegend(data.featureTypes);
+    } catch (e) {
+      renderEmpty('⚠ 无法连接后端，请确认服务已启动 (port 3001)');
       renderStats(null); renderLegend([]);
-      return;
     }
-
-    // --- Build X, Y, groups ---
-    const dateMap = {};
-    records.forEach(r => { dateMap[r.date] = r; });
-    const X = [], Y = [], groups = [];
-
-    for (const r of records) {
-      // If sleepTime is active, require previous day
-      let prevRecord = null;
-      if (needsPrev) {
-        const prevDate = new Date(r.date);
-        prevDate.setDate(prevDate.getDate() - 1);
-        prevRecord = dateMap[prevDate.toISOString().slice(0, 10)];
-        if (!prevRecord) continue;
-      }
-
-      const yValue = Number(target.getValue(r));
-      if (!Number.isFinite(yValue)) continue;
-
-      const row = [];
-      const medMap = {};
-      (r.medications || []).forEach(m => { medMap[m.id] = m; });
-
-      if (has('medTaken')) {
-        medIds.forEach(id => row.push(medMap[id] ? 1 : 0));
-      }
-      if (has('medTime')) {
-        medIds.forEach(id => {
-          const med = medMap[id];
-          if (med && medTimeStats[id]) {
-            const offsetHours = medicationBedtimeOffsetHours(med, r);
-            row.push(Number.isFinite(offsetHours) ? (offsetHours - medTimeStats[id].mean) / medTimeStats[id].sd : 0);
-          } else {
-            row.push(0);
-          }
-        });
-      }
-      if (has('medDose')) {
-        medIds.forEach(id => {
-          const med = medMap[id];
-          if (med && med.dose && medMeanDose[id]) {
-            const dv = parseDoseValue(med.dose);
-            row.push(dv !== null ? (dv - medMeanDose[id].mean) / (medMeanDose[id].sd || 1) : 0);
-          } else {
-            row.push(0);
-          }
-        });
-      }
-      if (has('events')) {
-        const evSet = new Set(r.events || []);
-        eventIds.forEach(id => row.push(evSet.has(id) ? 1 : 0));
-      }
-      if (has('sleepTime')) {
-        row.push(circularMinuteDiff(timeToMinutes(r.bedtime), meanBed) / sdBed);
-        row.push((prevRecord.effectiveSleep - meanSleep) / sdSleep);
-        row.push(prevRecord.score / 5 - 1);
-      }
-      if (has('bioMetrics')) {
-        const bio = r.biometrics || {};
-        if (includeHrv && bioStats.hrv.count > 0) row.push(bio.hrv != null ? (bio.hrv - bioStats.hrv.mean) / bioStats.hrv.sd : 0);
-        if (includeRhr && bioStats.rhr.count > 0) row.push(bio.rhr != null ? (bio.rhr - bioStats.rhr.mean) / bioStats.rhr.sd : 0);
-        if (includeDeep && bioStats.deep.count > 0) row.push(bio.deepSleepPct != null ? (bio.deepSleepPct - bioStats.deep.mean) / bioStats.deep.sd : 0);
-      }
-
-      X.push(row); Y.push(yValue);
-      groups.push(new Date(r.date).getDay());
-    }
-
-    if (X.length < 5) {
-      renderEmpty(`预测目标“${target.label}”有效记录不足 5 条`);
-      renderStats(null); renderLegend([]);
-      return;
-    }
-    if (X.some(row => row.length !== featureNames.length)) {
-      renderEmpty('模型特征维度不一致，请检查指标组合');
-      renderStats(null); renderLegend([]);
-      return;
-    }
-
-    // Drop zero-variance columns (#1). Common offenders: a supplement that is
-    // either always or never taken in the current window, an event that never
-    // occurred, etc. Such columns make X'X singular and would only contribute
-    // noise to the SE on the surviving columns. Naming them out keeps the user
-    // informed about why a chip "disappeared".
-    const droppedFeatures = [];
-    {
-      const keep = [];
-      for (let j = 0; j < featureNames.length; j++) {
-        let mean = 0;
-        for (let i = 0; i < X.length; i++) mean += X[i][j];
-        mean /= X.length;
-        let variance = 0;
-        for (let i = 0; i < X.length; i++) variance += (X[i][j] - mean) ** 2;
-        variance /= Math.max(X.length - 1, 1);
-        if (variance < 1e-10) droppedFeatures.push(featureNames[j]);
-        else keep.push(j);
-      }
-      if (keep.length !== featureNames.length) {
-        for (let i = 0; i < X.length; i++) X[i] = keep.map(j => X[i][j]);
-        const newNames = keep.map(j => featureNames[j]);
-        const newTypes = keep.map(j => featureTypes[j]);
-        featureNames.length = 0; featureNames.push(...newNames);
-        featureTypes.length = 0; featureTypes.push(...newTypes);
-      }
-    }
-
-    if (featureNames.length === 0) {
-      renderEmpty('当前窗口内所有特征方差为零（恒定值）');
-      renderStats(null); renderLegend([]);
-      return;
-    }
-    const regularization = {
-      enabled: false,
-      lambda: 1e-6,
-    };
-    const result = target.type === 'ordinal'
-      ? fitOrdinalMixed(X, Y, groups, useWeekdayRandomIntercept, regularization)
-      : fitLinearRegression(X, Y, regularization);
-    if (!result) {
-      renderEmpty('模型拟合失败 — 数据不足或特征共线');
-      renderStats(null); renderLegend([]);
-      return;
-    }
-    result.target = target;
-    result.modelType = target.type;
-    result.regularization = regularization;
-    result.droppedFeatures = droppedFeatures;
-    renderChart(featureNames, featureTypes, result.beta, result.oddsRatios, result.randomEffects, result);
-    renderStats(result);
-    renderLegend(featureTypes);
   }
 
   // ========== Data helpers ==========
