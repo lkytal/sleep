@@ -1,5 +1,5 @@
 /* data.js — Data layer: all persistence via backend API, scoped to current user */
-const API = 'http://localhost:3001/api';
+const API = '/api';
 
 const Data = (() => {
   let cachedRecords = {};

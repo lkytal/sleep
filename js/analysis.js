@@ -105,7 +105,7 @@ const Analysis = (() => {
 
     renderEmpty('计算中…');
     try {
-      const res = await fetch('http://localhost:3001/api/analysis', {
+      const res = await fetch('/api/analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,7 +129,7 @@ const Analysis = (() => {
       renderStats(data);
       renderLegend(data.featureTypes);
     } catch (e) {
-      renderEmpty('⚠ 无法连接后端，请确认服务已启动 (port 3001)');
+      renderEmpty(`⚠ 无法连接后端，请确认服务已启动 (port ${location.port})`);
       renderStats(null); renderLegend([]);
     }
   }
