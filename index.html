@@ -53,7 +53,7 @@
             <button class="window-btn active" data-days="0" onclick="Analysis.setWindow(0,this)">全部</button>
           </div>
         </div>
-        <p class="analysis-subtitle">有序回归模型（累积Logit，可选星期随机截距）· 系数为log-odds · OR &gt; 1 → 更高评分</p>
+        <p class="analysis-subtitle">有序回归模型（累积Logit）· 系数为log-odds · OR &gt; 1 → 更高评分</p>
         <div class="analysis-feature-row">
           <div class="analysis-features" id="analysis-features"></div>
           <label class="analysis-target-control">
@@ -175,6 +175,10 @@
           </div>
         </div>
         <div class="record-actions">
+          <label class="record-outlier-label" title="标记这一天为异常点，分析时可选择排除">
+            <input type="checkbox" id="record-outlier" class="record-outlier-cb">
+            <span>⚠️ 标记为异常点</span>
+          </label>
           <button id="btn-save" class="btn-primary" onclick="Record.save()">保存记录</button>
         </div>
       </div>

@@ -169,7 +169,7 @@ app.get('/api/config/events', (req, res) => res.json(readConfig('events.csv')));
 
 // ---- Analysis ----
 app.post('/api/analysis', (req, res) => {
-  const { userId, windowDays, activeGroups, predictionTarget, useWeekdayRandomIntercept } = req.body;
+  const { userId, windowDays, activeGroups, predictionTarget, useWeekdayRandomIntercept, includeOutliers } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId required' });
   const allMeds = readConfig('medications.csv');
   const allEvents = readConfig('events.csv');
@@ -179,6 +179,10 @@ app.post('/api/analysis', (req, res) => {
     cutoff.setDate(cutoff.getDate() - windowDays);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     records = records.filter(r => r.date >= cutoffStr);
+  }
+  // Filter out outlier records unless explicitly included
+  if (!includeOutliers) {
+    records = records.filter(r => !r.isOutlier);
   }
   const result = runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandomIntercept, allMeds, allEvents });
   if (result.error) return res.status(422).json(result);

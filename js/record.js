@@ -6,6 +6,7 @@ const Record = (() => {
   let selectedTags = new Set();
   let selectedEvents = new Set();
   let checkedMeds = {};
+  let isOutlier = false;
 
   async function init() {
     tags = await Data.loadTags();
@@ -100,6 +101,11 @@ const Record = (() => {
       document.getElementById('bio-rhr').value = r.biometrics.rhr != null ? r.biometrics.rhr : '';
       document.getElementById('bio-deep').value = r.biometrics.deepSleepPct != null ? r.biometrics.deepSleepPct : '';
     }
+
+    // Outlier
+    isOutlier = !!r.isOutlier;
+    const outlierCb = document.getElementById('record-outlier');
+    if (outlierCb) outlierCb.checked = isOutlier;
 
     // Medications
     checkedMeds = {};
@@ -363,6 +369,12 @@ const Record = (() => {
       record.biometrics = biometrics;
     }
 
+    // Outlier
+    const outlierCb = document.getElementById('record-outlier');
+    if (outlierCb && outlierCb.checked) {
+      record.isOutlier = true;
+    }
+
     Data.saveRecord(record);
     showToast('记录已保存 ✓');
     close();
@@ -409,6 +421,11 @@ const Record = (() => {
     document.getElementById('bio-hrv').value = '';
     document.getElementById('bio-rhr').value = '';
     document.getElementById('bio-deep').value = '';
+
+    // Reset outlier
+    isOutlier = false;
+    const outlierCb = document.getElementById('record-outlier');
+    if (outlierCb) outlierCb.checked = false;
   }
 
   return { init, open, close, handleOverlayClick, save };

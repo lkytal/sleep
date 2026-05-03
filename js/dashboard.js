@@ -234,13 +234,20 @@ const Dashboard = (() => {
         return `<span class="rc-med">${medMap[med.id] || med.id}${dose}</span>`;
       }).join('');
 
-      html += `<div class="record-card" onclick="Dashboard.editRecord('${r.date}')">
+      const isOutlier = !!r.isOutlier;
+      html += `<div class="record-card${isOutlier ? ' outlier' : ''}" onclick="Dashboard.editRecord('${r.date}')">
+        <label class="rc-outlier-label" onclick="event.stopPropagation()" title="标记为异常点">
+          <input type="checkbox" class="rc-outlier-cb" ${isOutlier ? 'checked' : ''} onchange="Dashboard.toggleOutlier('${r.date}', this.checked)">
+          <span class="rc-outlier-icon">⚠️</span>
+        </label>
         <span class="rc-date">${r.date}</span>
         <span class="rc-score" style="color:${scoreColor(r.score).replace('0.8','1').replace('0.7','1')}">${r.score}</span>
         <span class="rc-duration">${bed} → ${wake}<br>${dur}</span>
         <span class="rc-tags">${tagHtml}</span>
         <span class="rc-meds">${medHtml}</span>
-        <span class="rc-actions"><button class="rc-delete" onclick="event.stopPropagation();Dashboard.deleteRecord('${r.date}')">删除</button></span>
+        <span class="rc-actions">
+          <button class="rc-delete" onclick="event.stopPropagation();Dashboard.deleteRecord('${r.date}')">删除</button>
+        </span>
       </div>`;
     });
     container.innerHTML = html;
@@ -252,6 +259,16 @@ const Dashboard = (() => {
     if (record) Record.open(record);
   }
 
+  async function toggleOutlier(date, checked) {
+    const all = Data.getAll();
+    const record = all[date];
+    if (!record) return;
+    record.isOutlier = checked;
+    await Data.saveRecord(record);
+    showToast(checked ? `${date} 已标记为异常点` : `${date} 已取消异常标记`);
+    refresh();
+  }
+
   function deleteRecord(date) {
     if (!confirm(`确定删除 ${date} 的记录吗？`)) return;
     Data.deleteRecord(date);
@@ -259,5 +276,5 @@ const Dashboard = (() => {
     refresh();
   }
 
-  return { init, setWindow, refresh, editRecord, deleteRecord };
+  return { init, setWindow, refresh, editRecord, deleteRecord, toggleOutlier };
 })();

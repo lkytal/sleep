@@ -18,7 +18,7 @@ const Analysis = (() => {
   let allMeds = [], allEvents = [];
   let windowDays = 0; // 0 = all
   let predictionTarget = 'score';
-  let useWeekdayRandomIntercept = false;
+  let includeOutliers = false;
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
     medTaken: { label: '💊 补剂种类', checked: true },
@@ -53,11 +53,11 @@ const Analysis = (() => {
         <span>${g.label}</span>
       </label>`
     ).join('');
-    const weekdayChip = `<label class="af-chip${useWeekdayRandomIntercept ? ' checked' : ''}">
-        <input type="checkbox" ${useWeekdayRandomIntercept ? 'checked' : ''} onchange="Analysis.toggleWeekdayRandom(this)">
-        <span>📅 星期随机截距</span>
+    const outlierChip = `<label class="af-chip af-chip-outlier${includeOutliers ? ' checked' : ''}">
+        <input type="checkbox" ${includeOutliers ? 'checked' : ''} onchange="Analysis.toggleOutlierInclusion(this)">
+        <span>⚠️ 包含异常点</span>
       </label>`;
-    el.innerHTML = featureChips + weekdayChip;
+    el.innerHTML = featureChips + outlierChip;
   }
 
   function renderTargetSelect() {
@@ -74,8 +74,8 @@ const Analysis = (() => {
     refresh();
   }
 
-  function toggleWeekdayRandom(cb) {
-    useWeekdayRandomIntercept = cb.checked;
+  function toggleOutlierInclusion(cb) {
+    includeOutliers = cb.checked;
     cb.parentElement.classList.toggle('checked', cb.checked);
     refresh();
   }
@@ -113,7 +113,8 @@ const Analysis = (() => {
           windowDays,
           activeGroups,
           predictionTarget,
-          useWeekdayRandomIntercept,
+          useWeekdayRandomIntercept: false,
+          includeOutliers,
         }),
       });
       const data = await res.json();
@@ -705,9 +706,7 @@ const Analysis = (() => {
     const ridgeText = modelInfo.regularization.enabled ? `Ridge λ=${modelInfo.regularization.lambda}` : '无系数正则化';
 
     const titleText = isOrdinal
-      ? (modelInfo.useRandomIntercept
-        ? `随机截距 ▸ ${ridgeText} ▸ ${randomEffects.map(re => `周${re.day} ${re.value >= 0 ? '+' : ''}${re.value.toFixed(2)}`).join('  ')}`
-        : `累积Logit ▸ 未使用星期随机截距 ▸ ${ridgeText}`)
+      ? `累积Logit ▸ ${ridgeText} ▸ N=${modelInfo.n}`
       : `线性回归 ▸ ${ridgeText} ▸ 目标：${modelInfo.target.label} · R² ${(modelInfo.r2 * 100).toFixed(1)}% · RMSE ${modelInfo.rmse.toFixed(2)}${unit}`;
 
     chart = new Chart(ctx, {
@@ -862,14 +861,10 @@ const Analysis = (() => {
     }
     const r2Pct = (stats.pseudoR2 * 100).toFixed(1);
     const r2Color = stats.pseudoR2 > 0.3 ? 'var(--accent5)' : stats.pseudoR2 > 0.1 ? 'var(--accent4)' : 'var(--accent3)';
-    const sigmaB = Math.sqrt(stats.sigma2).toFixed(3);
-    const interceptCard = stats.useRandomIntercept
-      ? `<div class="stat-card"><span class="stat-label">σ随机</span><span class="stat-value">${sigmaB}</span></div>`
-      : '<div class="stat-card"><span class="stat-label">模型</span><span class="stat-value">Logit</span><span class="stat-desc">无星期随机</span></div>';
     el.innerHTML = `
       <div class="stat-card"><span class="stat-label">R²</span><span class="stat-value" style="color:${r2Color}">${r2Pct}%</span><span class="stat-desc">McFadden</span></div>
       <div class="stat-card"><span class="stat-label">LL / AIC</span><span class="stat-value">${stats.logLik.toFixed(0)}</span><span class="stat-desc">AIC ${stats.aic.toFixed(0)}</span></div>
-      ${interceptCard}
+      <div class="stat-card"><span class="stat-label">模型</span><span class="stat-value">Logit</span><span class="stat-desc">累积链接</span></div>
       <div class="stat-card"><span class="stat-label">N</span><span class="stat-value">${stats.n}</span><span class="stat-desc">${stats.p}特征 ${stats.K}级 ${ridgeDesc} ${convergedTag}</span></div>
       ${droppedTag}`;
   }
@@ -886,5 +881,5 @@ const Analysis = (() => {
               <div class="legend-item"><span class="legend-dot" style="background:${c.neg[1]}"></span>${labels[t] || t} (负)</div>`;
     }).join('');
   }
-  return { init, refresh, toggleGroup, toggleWeekdayRandom, setWindow, setTarget };
+  return { init, refresh, toggleGroup, toggleOutlierInclusion, setWindow, setTarget };
 })();
