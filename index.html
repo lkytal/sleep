@@ -75,7 +75,7 @@
         <button class="modal-close" onclick="Record.close()">&times;</button>
       </div>
       <div class="modal-body compact">
-        <!-- Row 1: Date + Duration + Score -->
+        <!-- Row 1: Date + Bedtime + Wake + Duration -->
         <div class="record-row top-row">
           <div class="compact-card date-card">
             <label>📅 日期</label>
@@ -91,29 +91,6 @@
               </div>
             </div>
           </div>
-          <div class="compact-card duration-wheel-card">
-            <label>⏱ 有效睡眠</label>
-            <div class="duration-picker" id="duration-picker">
-              <div class="time-wheel" data-field="dur-hour" data-min="3" data-max="12" data-step="1">
-                <span class="time-value" id="dur-hour">07</span><span class="time-label">时</span>
-              </div>
-              <div class="time-wheel" data-field="dur-min" data-min="0" data-max="45" data-step="15">
-                <span class="time-value" id="dur-min">00</span><span class="time-label">分</span>
-              </div>
-            </div>
-          </div>
-          <div class="compact-card score-wheel-card">
-            <label>⭐ 评分</label>
-            <div class="score-picker" id="score-picker">
-              <div class="time-wheel score-wheel" data-field="score-val" data-min="1.0" data-max="10.0" data-step="0.5">
-                <span class="time-value" id="score-val">7.0</span>
-              </div>
-              <span class="score-emoji-inline" id="score-emoji">😊</span>
-            </div>
-          </div>
-        </div>
-        <!-- Row 2: Bedtime + Wake time -->
-        <div class="record-row time-row">
           <div class="compact-card">
             <label>🌙 入睡</label>
             <div class="time-picker" id="bedtime-picker">
@@ -136,6 +113,56 @@
               <div class="time-wheel" data-field="wake-min" data-min="0" data-max="50" data-step="10">
                 <span class="time-value" id="wake-min">00</span><span class="time-label">分</span>
               </div>
+            </div>
+          </div>
+          <div class="compact-card duration-wheel-card">
+            <label>⏱ 有效睡眠</label>
+            <div class="duration-picker" id="duration-picker">
+              <div class="time-wheel" data-field="dur-hour" data-min="3" data-max="12" data-step="1">
+                <span class="time-value" id="dur-hour">07</span><span class="time-label">时</span>
+              </div>
+              <div class="time-wheel" data-field="dur-min" data-min="0" data-max="45" data-step="15">
+                <span class="time-value" id="dur-min">00</span><span class="time-label">分</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Row 2: Score + Subjective Ratings + Bio -->
+        <div class="record-row time-row">
+          <div class="compact-card score-wheel-card">
+            <label>⭐ 评分</label>
+            <div class="score-picker" id="score-picker">
+              <div class="time-wheel score-wheel" data-field="score-val" data-min="1.0" data-max="10.0" data-step="0.5">
+                <span class="time-value" id="score-val">7.0</span>
+              </div>
+              <span class="score-emoji-inline" id="score-emoji">😊</span>
+            </div>
+          </div>
+          <div class="compact-card subj-wheel-card">
+            <label>😴 困倦程度</label>
+            <div class="score-picker" id="drowsy-picker">
+              <div class="time-wheel subj-wheel" data-field="subj-drowsy" data-min="1" data-max="10" data-step="1">
+                <span class="time-value" id="subj-drowsy">5</span>
+              </div>
+              <span class="subj-scale-hint">/ 10</span>
+            </div>
+          </div>
+          <div class="compact-card subj-wheel-card">
+            <label>⚡ 精神程度</label>
+            <div class="score-picker" id="energy-picker">
+              <div class="time-wheel subj-wheel" data-field="subj-energy" data-min="1" data-max="10" data-step="1">
+                <span class="time-value" id="subj-energy">5</span>
+              </div>
+              <span class="subj-scale-hint">/ 10</span>
+            </div>
+          </div>
+          <div class="compact-card subj-wheel-card">
+            <label>😌 舒服程度</label>
+            <div class="score-picker" id="comfort-picker">
+              <div class="time-wheel subj-wheel" data-field="subj-comfort" data-min="1" data-max="10" data-step="1">
+                <span class="time-value" id="subj-comfort">5</span>
+              </div>
+              <span class="subj-scale-hint">/ 10</span>
             </div>
           </div>
           <div class="compact-card bio-card">

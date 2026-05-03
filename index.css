@@ -476,11 +476,13 @@ body {
 }
 
 .top-row {
-  grid-template-columns: 1.3fr 1fr 0.8fr;
+  /* Date | Bedtime | Wake | Duration */
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
 }
 
 .time-row {
-  grid-template-columns: 1fr 1fr 1.5fr;
+  /* Score | Drowsy | Energy | Comfort | Bio */
+  grid-template-columns: 0.7fr 0.7fr 0.7fr 0.7fr 1.5fr;
 }
 
 .detail-row {
@@ -589,6 +591,25 @@ body {
 
 /* Bio card */
 .bio-card {}
+
+/* Subjective feeling wheel card */
+.subj-wheel-card {}
+
+.subj-wheel .time-value {
+  background: linear-gradient(135deg, var(--accent3), var(--accent4));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 1.8rem;
+}
+
+.subj-scale-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 0.3rem;
+  font-weight: 500;
+  align-self: flex-end;
+  padding-bottom: 4px;
+}
 
 .optional-badge {
   font-size: 0.65rem;

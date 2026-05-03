@@ -102,6 +102,17 @@ const Record = (() => {
       document.getElementById('bio-deep').value = r.biometrics.deepSleepPct != null ? r.biometrics.deepSleepPct : '';
     }
 
+    // Subjective ratings
+    if (r.subjective) {
+      document.getElementById('subj-drowsy').textContent = r.subjective.drowsy != null ? String(r.subjective.drowsy) : '5';
+      document.getElementById('subj-energy').textContent = r.subjective.energy != null ? String(r.subjective.energy) : '5';
+      document.getElementById('subj-comfort').textContent = r.subjective.comfort != null ? String(r.subjective.comfort) : '5';
+    } else {
+      document.getElementById('subj-drowsy').textContent = '5';
+      document.getElementById('subj-energy').textContent = '5';
+      document.getElementById('subj-comfort').textContent = '5';
+    }
+
     // Outlier
     isOutlier = !!r.isOutlier;
     const outlierCb = document.getElementById('record-outlier');
@@ -158,6 +169,16 @@ const Record = (() => {
       if (current < 1) current = 10;
       valEl.textContent = current.toFixed(1);
       updateScoreEmoji(current);
+      return;
+    }
+
+    // Subjective fields (integer 1-10, no zero-pad)
+    if (field === 'subj-drowsy' || field === 'subj-energy' || field === 'subj-comfort') {
+      let current = parseInt(valEl.textContent);
+      if (delta < 0) current += 1; else current -= 1;
+      if (current > 10) current = 1;
+      if (current < 1) current = 10;
+      valEl.textContent = String(current);
       return;
     }
 
@@ -329,6 +350,13 @@ const Record = (() => {
     // Score from wheel
     const score = parseFloat(document.getElementById('score-val').textContent);
 
+    // Subjective ratings
+    const subjective = {
+      drowsy:  parseInt(document.getElementById('subj-drowsy').textContent),
+      energy:  parseInt(document.getElementById('subj-energy').textContent),
+      comfort: parseInt(document.getElementById('subj-comfort').textContent)
+    };
+
     // Biometrics (optional)
     const hrvVal = document.getElementById('bio-hrv').value;
     const rhrVal = document.getElementById('bio-rhr').value;
@@ -359,6 +387,7 @@ const Record = (() => {
       wakeTime: { hour: wakeHour, minute: wakeMin },
       effectiveSleep,
       score,
+      subjective,
       tags: Array.from(selectedTags),
       events: Array.from(selectedEvents),
       medications: meds
@@ -416,6 +445,11 @@ const Record = (() => {
     document.getElementById('dur-min').textContent = '00';
     document.getElementById('score-val').textContent = '7.0';
     updateScoreEmoji(7);
+
+    // Reset subjective ratings
+    document.getElementById('subj-drowsy').textContent = '5';
+    document.getElementById('subj-energy').textContent = '5';
+    document.getElementById('subj-comfort').textContent = '5';
 
     // Reset biometrics
     document.getElementById('bio-hrv').value = '';
