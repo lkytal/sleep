@@ -16,6 +16,7 @@ const Record = (() => {
     renderEvents();
     renderMedications();
     initWheels();
+    initSubjWheels();
   }
 
   /* ---- Modal open / close ---- */
@@ -103,15 +104,19 @@ const Record = (() => {
     }
 
     // Subjective ratings
-    if (r.subjective) {
-      document.getElementById('subj-drowsy').textContent = r.subjective.drowsy != null ? String(r.subjective.drowsy) : '5';
-      document.getElementById('subj-energy').textContent = r.subjective.energy != null ? String(r.subjective.energy) : '5';
-      document.getElementById('subj-comfort').textContent = r.subjective.comfort != null ? String(r.subjective.comfort) : '5';
-    } else {
-      document.getElementById('subj-drowsy').textContent = '5';
-      document.getElementById('subj-energy').textContent = '5';
-      document.getElementById('subj-comfort').textContent = '5';
-    }
+    const subjKeys = ['drowsy', 'energy', 'comfort'];
+    subjKeys.forEach(key => {
+      const el = document.getElementById(`subj-${key}`);
+      const val = r.subjective && r.subjective[key] != null && r.subjective[key] > 0
+        ? r.subjective[key] : null;
+      if (val != null) {
+        el.textContent = String(val);
+        el.dataset.empty = 'false';
+      } else {
+        el.textContent = '—';
+        el.dataset.empty = 'true';
+      }
+    });
 
     // Outlier
     isOutlier = !!r.isOutlier;
@@ -172,16 +177,7 @@ const Record = (() => {
       return;
     }
 
-    // Subjective fields (integer 1-10, no zero-pad)
-    if (field === 'subj-drowsy' || field === 'subj-energy' || field === 'subj-comfort') {
-      let current = parseInt(valEl.textContent);
-      if (delta < 0) current += 1; else current -= 1;
-      if (current > 10) current = 1;
-      if (current < 1) current = 10;
-      valEl.textContent = String(current);
-      return;
-    }
-
+    // Subjective fields handled separately by initSubjWheels
     const min = parseInt(el.dataset.min);
     const max = parseInt(el.dataset.max);
     const step = parseInt(el.dataset.step);
@@ -212,6 +208,27 @@ const Record = (() => {
       if (current < min) current = max;
       valEl.textContent = String(current).padStart(2, '0');
     }, { passive: false });
+  }
+
+  /* ---- Subjective feeling wheels (0–5, optional, empty until touched) ---- */
+  function initSubjWheels() {
+    document.querySelectorAll('.subj-wheel-item').forEach(wheelEl => {
+      const valEl = wheelEl.querySelector('.subj-value');
+      wheelEl.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (valEl.dataset.empty === 'true') {
+          // First interaction: start at 1
+          valEl.textContent = '1';
+          valEl.dataset.empty = 'false';
+          return;
+        }
+        let current = parseInt(valEl.textContent);
+        if (e.deltaY < 0) current += 1; else current -= 1;
+        if (current > 5) current = 5;
+        if (current < 0) current = 0;
+        valEl.textContent = String(current);
+      }, { passive: false });
+    });
   }
 
   /* ---- Score emoji ---- */
@@ -350,12 +367,15 @@ const Record = (() => {
     // Score from wheel
     const score = parseFloat(document.getElementById('score-val').textContent);
 
-    // Subjective ratings
-    const subjective = {
-      drowsy:  parseInt(document.getElementById('subj-drowsy').textContent),
-      energy:  parseInt(document.getElementById('subj-energy').textContent),
-      comfort: parseInt(document.getElementById('subj-comfort').textContent)
-    };
+    // Subjective ratings (0 treated as empty/null, not stored)
+    const subjective = {};
+    ['drowsy', 'energy', 'comfort'].forEach(key => {
+      const el = document.getElementById(`subj-${key}`);
+      if (el.dataset.empty !== 'true') {
+        const val = parseInt(el.textContent);
+        if (val > 0) subjective[key] = val;
+      }
+    });
 
     // Biometrics (optional)
     const hrvVal = document.getElementById('bio-hrv').value;
@@ -387,11 +407,15 @@ const Record = (() => {
       wakeTime: { hour: wakeHour, minute: wakeMin },
       effectiveSleep,
       score,
-      subjective,
       tags: Array.from(selectedTags),
       events: Array.from(selectedEvents),
       medications: meds
     };
+
+    // Only add subjective if any key present
+    if (Object.keys(subjective).length > 0) {
+      record.subjective = subjective;
+    }
 
     // Only add biometrics if any value was entered
     if (Object.keys(biometrics).length > 0) {
@@ -446,10 +470,12 @@ const Record = (() => {
     document.getElementById('score-val').textContent = '7.0';
     updateScoreEmoji(7);
 
-    // Reset subjective ratings
-    document.getElementById('subj-drowsy').textContent = '5';
-    document.getElementById('subj-energy').textContent = '5';
-    document.getElementById('subj-comfort').textContent = '5';
+    // Reset subjective ratings to empty
+    ['drowsy', 'energy', 'comfort'].forEach(key => {
+      const el = document.getElementById(`subj-${key}`);
+      el.textContent = '—';
+      el.dataset.empty = 'true';
+    });
 
     // Reset biometrics
     document.getElementById('bio-hrv').value = '';

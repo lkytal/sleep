@@ -481,8 +481,8 @@ body {
 }
 
 .time-row {
-  /* Score | Drowsy | Energy | Comfort | Bio */
-  grid-template-columns: 0.7fr 0.7fr 0.7fr 0.7fr 1.5fr;
+  /* Score | Subjective | Bio */
+  grid-template-columns: 0.65fr 1fr 1.5fr;
 }
 
 .detail-row {
@@ -592,23 +592,66 @@ body {
 /* Bio card */
 .bio-card {}
 
-/* Subjective feeling wheel card */
-.subj-wheel-card {}
+/* Subjective feelings card — merged 3-item wheel card */
+.subj-card {}
 
-.subj-wheel .time-value {
-  background: linear-gradient(135deg, var(--accent3), var(--accent4));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-size: 1.8rem;
+.subj-row {
+  display: flex;
+  gap: 0.4rem;
 }
 
-.subj-scale-hint {
-  font-size: 0.75rem;
+.subj-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  transition: var(--transition);
+  cursor: ns-resize;
+  user-select: none;
+}
+
+.subj-item:hover {
+  border-color: var(--accent3);
+  background: rgba(253, 121, 168, 0.06);
+}
+
+.subj-label {
+  font-size: 0.68rem;
   color: var(--text-muted);
-  margin-left: 0.3rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 22px;
+}
+
+.subj-wheel-item {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.subj-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent3);
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+  text-align: center;
+}
+
+.subj-value[data-empty="true"] {
+  color: var(--text-muted);
+  opacity: 0.45;
+}
+
+.subj-unit {
+  font-size: 0.62rem;
+  color: var(--text-muted);
   font-weight: 500;
-  align-self: flex-end;
-  padding-bottom: 4px;
+  white-space: nowrap;
 }
 
 .optional-badge {

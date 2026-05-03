@@ -127,7 +127,7 @@
             </div>
           </div>
         </div>
-        <!-- Row 2: Score + Subjective Ratings + Bio -->
+        <!-- Row 2: Score + Subjective + Bio -->
         <div class="record-row time-row">
           <div class="compact-card score-wheel-card">
             <label>⭐ 评分</label>
@@ -138,31 +138,30 @@
               <span class="score-emoji-inline" id="score-emoji">😊</span>
             </div>
           </div>
-          <div class="compact-card subj-wheel-card">
-            <label>😴 困倦程度</label>
-            <div class="score-picker" id="drowsy-picker">
-              <div class="time-wheel subj-wheel" data-field="subj-drowsy" data-min="1" data-max="10" data-step="1">
-                <span class="time-value" id="subj-drowsy">5</span>
+          <div class="compact-card subj-card">
+            <label>🧠 主观感受 <span class="optional-badge">可选</span></label>
+            <div class="subj-row">
+              <div class="subj-item">
+                <span class="subj-label">困倦</span>
+                <div class="subj-wheel-item" data-min="0" data-max="5" data-step="1">
+                  <span class="subj-value" id="subj-drowsy" data-empty="true">—</span>
+                </div>
+                <span class="subj-unit">/ 5</span>
               </div>
-              <span class="subj-scale-hint">/ 10</span>
-            </div>
-          </div>
-          <div class="compact-card subj-wheel-card">
-            <label>⚡ 精神程度</label>
-            <div class="score-picker" id="energy-picker">
-              <div class="time-wheel subj-wheel" data-field="subj-energy" data-min="1" data-max="10" data-step="1">
-                <span class="time-value" id="subj-energy">5</span>
+              <div class="subj-item">
+                <span class="subj-label">精神</span>
+                <div class="subj-wheel-item" data-min="0" data-max="5" data-step="1">
+                  <span class="subj-value" id="subj-energy" data-empty="true">—</span>
+                </div>
+                <span class="subj-unit">/ 5</span>
               </div>
-              <span class="subj-scale-hint">/ 10</span>
-            </div>
-          </div>
-          <div class="compact-card subj-wheel-card">
-            <label>😌 舒服程度</label>
-            <div class="score-picker" id="comfort-picker">
-              <div class="time-wheel subj-wheel" data-field="subj-comfort" data-min="1" data-max="10" data-step="1">
-                <span class="time-value" id="subj-comfort">5</span>
+              <div class="subj-item">
+                <span class="subj-label">舒服</span>
+                <div class="subj-wheel-item" data-min="0" data-max="5" data-step="1">
+                  <span class="subj-value" id="subj-comfort" data-empty="true">—</span>
+                </div>
+                <span class="subj-unit">/ 5</span>
               </div>
-              <span class="subj-scale-hint">/ 10</span>
             </div>
           </div>
           <div class="compact-card bio-card">
