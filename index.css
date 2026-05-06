@@ -1180,7 +1180,8 @@ body {
 }
 
 .analysis-chart-container {
-  height: 480px;
+  min-height: 320px;
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .analysis-legend {

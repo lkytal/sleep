@@ -682,6 +682,20 @@ const Analysis = (() => {
   }
 
   // ========== Rendering ==========
+
+  // Dynamically adjust the chart container height based on the number of features.
+  // Each row gets ~34 px of space; add fixed overhead for title, axes, padding.
+  function setChartHeight(featureCount) {
+    const container = document.querySelector('.analysis-chart-container');
+    if (!container) return;
+    const perRow = 34;        // px per feature bar
+    const overhead = 100;     // title + x-axis + padding
+    const minH = 320;
+    const maxH = 900;
+    const h = Math.min(maxH, Math.max(minH, featureCount * perRow + overhead));
+    container.style.height = h + 'px';
+  }
+
   const TYPE_COLORS = {
     taken: { pos: ['rgba(85,239,196,0.75)', '#55efc4'], neg: ['rgba(225,112,85,0.75)', '#e17055'] },
     offset: { pos: ['rgba(116,185,255,0.75)', '#74b9ff'], neg: ['rgba(253,203,110,0.75)', '#fdcb6e'] },
@@ -697,6 +711,7 @@ const Analysis = (() => {
   }
 
   function renderChart(featureNames, featureTypes, weights, oddsRatios, randomEffects, modelInfo) {
+    setChartHeight(featureNames.length);
     const ctx = document.getElementById('analysis-chart').getContext('2d');
     if (chart) chart.destroy();
     const isOrdinal = modelInfo.modelType === 'ordinal';
@@ -828,6 +843,7 @@ const Analysis = (() => {
   }
 
   function renderEmpty(msg) {
+    setChartHeight(0); // reset to minimum height when empty
     const ctx = document.getElementById('analysis-chart').getContext('2d');
     if (chart) { chart.destroy(); chart = null; }
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
