@@ -1,5 +1,6 @@
 'use strict';
 const { fitOrdinalMixed, fitLinearRegression } = require('./modelFit');
+const { sigmoid } = require('./mathUtils');
 
 // ---- Data helpers ----
 function timeToMinutes(time) {
@@ -102,7 +103,7 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
 
   const dateMap = {};
   records.forEach(r => { dateMap[r.date] = r; });
-  const X = [], Yarr = [], groups = [];
+  const X = [], Yarr = [], groups = [], dates = [];
   for (const r of records) {
     let prevRecord = null;
     if (needsPrev) {
@@ -126,7 +127,7 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
       if (includeRhr && bioStats.rhr.count > 0) row.push(bio.rhr != null ? (bio.rhr - bioStats.rhr.mean) / bioStats.rhr.sd : 0);
       if (includeDeep && bioStats.deep.count > 0) row.push(bio.deepSleepPct != null ? (bio.deepSleepPct - bioStats.deep.mean) / bioStats.deep.sd : 0);
     }
-    X.push(row); Yarr.push(yVal); groups.push(new Date(r.date).getDay());
+    X.push(row); Yarr.push(yVal); groups.push(new Date(r.date).getDay()); dates.push(r.date);
   }
 
   if (X.length < 5) return { error: `预测目标"${target.label}"有效记录不足 5 条` };
@@ -153,7 +154,60 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
     : fitLinearRegression(X, Yarr, regularization);
 
   if (!result) return { error: '模型拟合失败 — 数据不足或特征共线' };
-  return { ...result, featureNames, featureTypes, targetKey: predictionTarget, targetLabel: target.label, targetType: target.type, targetUnit: target.unit, droppedFeatures, regularization };
+
+  // ---- Compute per-day match scores ----
+  const dailyMatch = [];
+  const p = result.beta.length;
+  if (target.type === 'ordinal') {
+    const K = result.K;
+    const levels = result.levels;
+    const alpha = result.alpha;
+    const beta = result.beta;
+    for (let i = 0; i < X.length; i++) {
+      let eta = 0;
+      for (let j = 0; j < p; j++) eta += X[i][j] * beta[j];
+      // Compute P(Y = actual_k) using cumulative logit
+      const actualIdx = levels.indexOf(Yarr[i]);
+      // P(Y <= k) = sigmoid(alpha[k] - eta)
+      const upper = actualIdx < K - 1 ? sigmoid(alpha[actualIdx] - eta) : 1;
+      const lower = actualIdx > 0 ? sigmoid(alpha[actualIdx - 1] - eta) : 0;
+      const pActual = Math.max(upper - lower, 0);
+      // Compute expected (mean) category index
+      let expectedIdx = 0;
+      for (let k = 0; k < K; k++) {
+        const pu = k < K - 1 ? sigmoid(alpha[k] - eta) : 1;
+        const pl = k > 0 ? sigmoid(alpha[k - 1] - eta) : 0;
+        expectedIdx += k * Math.max(pu - pl, 0);
+      }
+      dailyMatch.push({
+        date: dates[i],
+        actual: Yarr[i],
+        predicted: levels[Math.round(Math.min(Math.max(expectedIdx, 0), K - 1))],
+        matchPct: Math.round(pActual * 100),
+      });
+    }
+  } else {
+    // Continuous: predicted = intercept + X * beta
+    const intercept = result.intercept || 0;
+    const beta = result.beta;
+    const yMin = Math.min(...Yarr);
+    const yMax = Math.max(...Yarr);
+    const yRange = Math.max(yMax - yMin, 1e-6);
+    for (let i = 0; i < X.length; i++) {
+      let pred = intercept;
+      for (let j = 0; j < p; j++) pred += X[i][j] * beta[j];
+      const error = Math.abs(Yarr[i] - pred);
+      const matchPct = Math.round(Math.max(0, 1 - error / yRange) * 100);
+      dailyMatch.push({
+        date: dates[i],
+        actual: +Yarr[i].toFixed(2),
+        predicted: +pred.toFixed(2),
+        matchPct,
+      });
+    }
+  }
+
+  return { ...result, featureNames, featureTypes, targetKey: predictionTarget, targetLabel: target.label, targetType: target.type, targetUnit: target.unit, droppedFeatures, regularization, dailyMatch };
 }
 
 module.exports = { runAnalysis, PRED_TARGETS };

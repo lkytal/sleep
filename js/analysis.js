@@ -15,6 +15,7 @@
  * they are pure interaction terms with medTaken. */
 const Analysis = (() => {
   let chart = null;
+  let dailyMatchChart = null;
   let allMeds = [], allEvents = [];
   let windowDays = 0; // 0 = all
   let startDate = null;
@@ -116,7 +117,7 @@ const Analysis = (() => {
 
     if (activeGroups.length === 0) {
       renderEmpty('请至少勾选一个指标组');
-      renderStats(null); renderLegend([]);
+      renderStats(null); renderLegend([]); renderDailyMatchChart(null);
       return;
     }
 
@@ -138,18 +139,19 @@ const Analysis = (() => {
       const data = await res.json();
       if (!res.ok || data.error) {
         renderEmpty(data.error || '分析请求失败');
-        renderStats(null); renderLegend([]);
+        renderStats(null); renderLegend([]); renderDailyMatchChart(null);
         return;
       }
       // Reconstruct target object for rendering (labels/units)
       data.target = predictionTargets[data.targetKey] || predictionTargets[predictionTarget];
       data.modelType = data.targetType;
       renderChart(data.featureNames, data.featureTypes, data.beta, data.oddsRatios, data.randomEffects, data);
+      renderDailyMatchChart(data.dailyMatch, data);
       renderStats(data);
       renderLegend(data.featureTypes);
     } catch (e) {
       renderEmpty(`⚠ 无法连接后端，请确认服务已启动 (port ${location.port})`);
-      renderStats(null); renderLegend([]);
+      renderStats(null); renderLegend([]); renderDailyMatchChart(null);
     }
   }
 
@@ -914,6 +916,138 @@ const Analysis = (() => {
       return `<div class="legend-item"><span class="legend-dot" style="background:${c.pos[1]}"></span>${labels[t] || t} (正)</div>
               <div class="legend-item"><span class="legend-dot" style="background:${c.neg[1]}"></span>${labels[t] || t} (负)</div>`;
     }).join('');
+  }
+
+  // ========== Daily Match Bar Chart ==========
+  function renderDailyMatchChart(dailyMatch, modelInfo) {
+    const ctx = document.getElementById('daily-match-chart');
+    if (!ctx) return;
+    const container = document.querySelector('.daily-match-chart-container');
+    if (dailyMatchChart) { dailyMatchChart.destroy(); dailyMatchChart = null; }
+    if (!dailyMatch || !dailyMatch.length) {
+      if (container) container.style.display = 'none';
+      return;
+    }
+    if (container) container.style.display = '';
+
+    const labels = dailyMatch.map(d => {
+      const [, mm, dd] = d.date.split('-');
+      return `${parseInt(mm, 10)}/${parseInt(dd, 10)}`;
+    });
+    const values = dailyMatch.map(d => d.matchPct);
+    const isOrdinal = modelInfo && modelInfo.modelType === 'ordinal';
+    const targetLabel = modelInfo && modelInfo.target ? modelInfo.target.label : '';
+
+    // Gradient colors based on match percentage
+    const bgColors = values.map(v => {
+      if (v >= 70) return 'rgba(85, 239, 196, 0.75)';   // high match — green
+      if (v >= 40) return 'rgba(253, 203, 110, 0.75)';   // medium — amber
+      return 'rgba(225, 112, 85, 0.75)';                 // low — red
+    });
+    const borderColors = values.map(v => {
+      if (v >= 70) return '#55efc4';
+      if (v >= 40) return '#fdcb6e';
+      return '#e17055';
+    });
+
+    dailyMatchChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: '匹配度 %',
+          data: values,
+          backgroundColor: bgColors,
+          borderColor: borderColors,
+          borderWidth: 2,
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 4, bottom: 4 } },
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: `每日预测匹配度 ▸ ${targetLabel} ▸ ${dailyMatch.length} 天`,
+            color: '#8892a8',
+            font: { family: 'Inter, Noto Sans SC', size: 12, weight: 600 },
+            align: 'start',
+            padding: { bottom: 8 }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(17,24,39,0.95)',
+            borderColor: '#6c5ce7',
+            borderWidth: 1,
+            titleFont: { family: 'Inter, Noto Sans SC' },
+            bodyFont: { family: 'Inter, Noto Sans SC' },
+            callbacks: {
+              title: tips => {
+                const idx = tips[0].dataIndex;
+                return dailyMatch[idx].date;
+              },
+              label: tip => {
+                const d = dailyMatch[tip.dataIndex];
+                const lines = [
+                  `匹配度: ${d.matchPct}%`,
+                  `实际值: ${d.actual}`,
+                  `预测值: ${d.predicted}`,
+                ];
+                return lines;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            min: 0,
+            max: 100,
+            grid: { color: 'rgba(42,48,80,0.3)' },
+            ticks: {
+              color: '#8892a8',
+              font: { family: 'Inter', size: 10 },
+              callback: v => v + '%',
+              stepSize: 25,
+            },
+            title: {
+              display: true,
+              text: '匹配度',
+              color: '#8892a8',
+              font: { family: 'Inter, Noto Sans SC', size: 11 }
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: '#8892a8',
+              font: { family: 'Inter', size: 10 },
+              maxRotation: 45,
+              minRotation: 0,
+            }
+          }
+        }
+      },
+      plugins: [{
+        id: 'matchLabels',
+        afterDatasetsDraw(ch) {
+          const { ctx: c, data, scales: { x, y } } = ch;
+          c.save();
+          c.font = '600 9px Inter, sans-serif';
+          c.textAlign = 'center';
+          c.textBaseline = 'bottom';
+          data.datasets[0].data.forEach((val, idx) => {
+            const xPos = x.getPixelForValue(idx);
+            const yPos = y.getPixelForValue(val);
+            c.fillStyle = val >= 70 ? '#55efc4' : val >= 40 ? '#fdcb6e' : '#e17055';
+            c.fillText(val + '%', xPos, yPos - 3);
+          });
+          c.restore();
+        }
+      }]
+    });
   }
   return { init, refresh, toggleGroup, toggleOutlierInclusion, setWindow, setStartDate, setTarget };
 })();

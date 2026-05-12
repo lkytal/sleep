@@ -1201,6 +1201,13 @@ body {
   transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.daily-match-chart-container {
+  height: 220px;
+  min-height: 180px;
+  background: linear-gradient(135deg, var(--bg-card), rgba(108, 92, 231, 0.04));
+  border-color: rgba(108, 92, 231, 0.2);
+}
+
 .analysis-legend {
   display: flex;
   flex-wrap: wrap;
