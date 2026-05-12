@@ -51,6 +51,7 @@
             <button class="window-btn" data-days="14" onclick="Analysis.setWindow(14,this)">14天</button>
             <button class="window-btn" data-days="30" onclick="Analysis.setWindow(30,this)">30天</button>
             <button class="window-btn active" data-days="0" onclick="Analysis.setWindow(0,this)">全部</button>
+            <input type="date" id="analysis-start-date" class="window-date" title="自定义开始日期" onchange="Analysis.setStartDate(this.value)">
           </div>
         </div>
         <p class="analysis-subtitle">有序回归模型（累积Logit）· 系数为log-odds · OR &gt; 1 → 更高评分</p>

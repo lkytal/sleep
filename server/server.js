@@ -169,12 +169,15 @@ app.get('/api/config/events', (req, res) => res.json(readConfig('events.csv')));
 
 // ---- Analysis ----
 app.post('/api/analysis', (req, res) => {
-  const { userId, windowDays, activeGroups, predictionTarget, useWeekdayRandomIntercept, includeOutliers } = req.body;
+  const { userId, windowDays, startDate, activeGroups, predictionTarget, useWeekdayRandomIntercept, includeOutliers } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId required' });
   const allMeds = readConfig('medications.csv');
   const allEvents = readConfig('events.csv');
   let records = Object.values(readData(userId)).sort((a, b) => a.date.localeCompare(b.date));
-  if (windowDays > 0) {
+  
+  if (startDate) {
+    records = records.filter(r => r.date >= startDate);
+  } else if (windowDays > 0) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - windowDays);
     const cutoffStr = cutoff.toISOString().slice(0, 10);

@@ -17,6 +17,7 @@ const Analysis = (() => {
   let chart = null;
   let allMeds = [], allEvents = [];
   let windowDays = 0; // 0 = all
+  let startDate = null;
   let predictionTarget = 'score';
   let includeOutliers = false;
   // Feature group toggle state — medTaken is default checked
@@ -82,8 +83,24 @@ const Analysis = (() => {
 
   function setWindow(days, btn) {
     windowDays = days;
+    startDate = null;
+    const dateInput = document.getElementById('analysis-start-date');
+    if (dateInput) dateInput.value = '';
     document.querySelectorAll('#page-analysis .window-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
+    refresh();
+  }
+
+  function setStartDate(dateStr) {
+    startDate = dateStr || null;
+    if (startDate) {
+      windowDays = 0;
+      document.querySelectorAll('#page-analysis .window-btn').forEach(b => b.classList.remove('active'));
+    } else {
+      // If user clears the date input, default to 'all'
+      setWindow(0, document.querySelector('#page-analysis .window-btn[data-days="0"]'));
+      return;
+    }
     refresh();
   }
 
@@ -111,6 +128,7 @@ const Analysis = (() => {
         body: JSON.stringify({
           userId: Data.getUserId(),
           windowDays,
+          startDate,
           activeGroups,
           predictionTarget,
           useWeekdayRandomIntercept: false,
@@ -897,5 +915,5 @@ const Analysis = (() => {
               <div class="legend-item"><span class="legend-dot" style="background:${c.neg[1]}"></span>${labels[t] || t} (负)</div>`;
     }).join('');
   }
-  return { init, refresh, toggleGroup, toggleOutlierInclusion, setWindow, setTarget };
+  return { init, refresh, toggleGroup, toggleOutlierInclusion, setWindow, setStartDate, setTarget };
 })();

@@ -331,6 +331,23 @@ body {
   color: #fff;
 }
 
+.window-date {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font: 500 0.85rem var(--font);
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+  color-scheme: dark;
+}
+
+.window-date:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .chart-container {
   background: var(--bg-card);
   border: 1px solid var(--border);
