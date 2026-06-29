@@ -20,6 +20,7 @@ const Analysis = (() => {
   let windowDays = 0; // 0 = all
   let startDate = null;
   let predictionTarget = 'score';
+  let targetLagDays = 0; // include target's own previous N days (0–3) as features
   let includeOutliers = false;
   // Feature group toggle state — medTaken is default checked
   const featureGroups = {
@@ -111,6 +112,11 @@ const Analysis = (() => {
     refresh();
   }
 
+  function setLagDays(value) {
+    targetLagDays = Math.max(0, Math.min(3, parseInt(value, 10) || 0));
+    refresh();
+  }
+
   // ========== Main refresh — delegates computation to backend ==========
   async function refresh() {
     const activeGroups = Object.entries(featureGroups).filter(([, g]) => g.checked).map(([k]) => k);
@@ -132,6 +138,7 @@ const Analysis = (() => {
           startDate,
           activeGroups,
           predictionTarget,
+          targetLagDays,
           useWeekdayRandomIntercept: false,
           includeOutliers,
         }),
@@ -723,6 +730,7 @@ const Analysis = (() => {
     event: { pos: ['rgba(253,121,168,0.75)', '#fd79a8'], neg: ['rgba(99,110,114,0.65)', '#636e72'] },
     sleep: { pos: ['rgba(162,155,254,0.75)', '#a29bfe'], neg: ['rgba(255,234,167,0.75)', '#ffeaa7'] },
     bio: { pos: ['rgba(129,236,236,0.75)', '#81ecec'], neg: ['rgba(255,118,117,0.75)', '#ff7675'] },
+    lag: { pos: ['rgba(250,177,160,0.75)', '#fab1a0'], neg: ['rgba(108,92,231,0.75)', '#6c5ce7'] },
   };
 
   function getColor(type, value) {
@@ -909,7 +917,7 @@ const Analysis = (() => {
     const el = document.getElementById('analysis-legend');
     const active = [...new Set(featureTypes)];
     const labels = {
-      taken: '补剂种类', offset: '补剂时间', dose: '补剂剂量', event: '睡眠事件', sleep: '睡眠时间', bio: '生理指标',
+      taken: '补剂种类', offset: '补剂时间', dose: '补剂剂量', event: '睡眠事件', sleep: '睡眠时间', bio: '生理指标', lag: '同指标历史',
     };
     el.innerHTML = active.map(t => {
       const c = TYPE_COLORS[t];
@@ -1049,5 +1057,5 @@ const Analysis = (() => {
       }]
     });
   }
-  return { init, refresh, toggleGroup, toggleOutlierInclusion, setWindow, setStartDate, setTarget };
+  return { init, refresh, toggleGroup, toggleOutlierInclusion, setWindow, setStartDate, setTarget, setLagDays };
 })();

@@ -61,6 +61,15 @@
             <span>预测目标</span>
             <select id="analysis-target" onchange="Analysis.setTarget(this.value)"></select>
           </label>
+          <label class="analysis-target-control" title="将预测目标自身前 N 天的数值作为特征加入回归">
+            <span>同指标回溯天数</span>
+            <select id="analysis-lag" onchange="Analysis.setLagDays(this.value)">
+              <option value="0" selected>0（不回溯）</option>
+              <option value="1">前 1 天</option>
+              <option value="2">前 2 天</option>
+              <option value="3">前 3 天</option>
+            </select>
+          </label>
         </div>
         <div class="analysis-stats" id="analysis-stats"></div>
       </div>

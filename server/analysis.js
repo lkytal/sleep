@@ -59,11 +59,14 @@ const PRED_TARGETS = {
   effectiveSleep: { label: '睡眠时长', type: 'continuous', unit: '小时', getValue: r => r.effectiveSleep },
 };
 
-function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandomIntercept, allMeds, allEvents }) {
+function runAnalysis({ records, activeGroups, predictionTarget, targetLagDays, useWeekdayRandomIntercept, allMeds, allEvents }) {
   const target = PRED_TARGETS[predictionTarget];
   if (!target) return { error: '未知预测目标' };
   if (!activeGroups.length) return { error: '请至少勾选一个指标组' };
   if (records.length < 5) return { error: '至少需要 5 条记录才能进行回归分析' };
+
+  // Number of preceding days of the target metric to include as features (0–3).
+  const lagDays = Math.max(0, Math.min(3, Number(targetLagDays) || 0));
 
   const medIds = allMeds.map(m => m.id);
   const eventIds = allEvents.map(e => e.id);
@@ -88,6 +91,17 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
     let b2 = 0; records.forEach(r => { b2 += circularMinuteDiff(timeToMinutes(r.bedtime), meanBed) ** 2; }); sdBed = Math.sqrt(b2 / Math.max(records.length - 1, 1)) || 1;
   }
 
+  // Standardization stats for the target metric itself, used to z-score lag features.
+  let targetMean = 0, targetSd = 1;
+  if (lagDays > 0) {
+    const tv = [];
+    records.forEach(r => { const v = Number(target.getValue(r)); if (Number.isFinite(v)) tv.push(v); });
+    if (tv.length) {
+      targetMean = tv.reduce((s, x) => s + x, 0) / tv.length;
+      targetSd = Math.sqrt(tv.reduce((s, x) => s + (x - targetMean) ** 2, 0) / Math.max(tv.length - 1, 1)) || 1;
+    }
+  }
+
   const featureNames = [], featureTypes = [];
   if (has('medTaken')) medIds.forEach(id => { featureNames.push(`${(allMeds.find(m => m.id === id) || {}).name || id} 服用`); featureTypes.push('taken'); });
   if (has('medTime')) medIds.forEach(id => { featureNames.push(`${(allMeds.find(m => m.id === id) || {}).name || id} 相对入睡时间`); featureTypes.push('offset'); });
@@ -99,6 +113,7 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
     if (includeRhr && bioStats.rhr.count > 0) { featureNames.push('静息心率'); featureTypes.push('bio'); }
     if (includeDeep && bioStats.deep.count > 0) { featureNames.push('深睡比例'); featureTypes.push('bio'); }
   }
+  for (let d = 1; d <= lagDays; d++) { featureNames.push(`${target.label} 前${d}日`); featureTypes.push('lag'); }
   if (!featureNames.length) return { error: '当前预测目标已从回归内容中移除，请再勾选其他指标组' };
 
   const dateMap = {};
@@ -113,6 +128,21 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
     }
     const yVal = Number(target.getValue(r));
     if (!Number.isFinite(yVal)) continue;
+    // Collect the target's own values from the preceding `lagDays` days; skip the
+    // record if any required prior day is missing so the feature matrix stays complete.
+    let lagVals = null;
+    if (lagDays > 0) {
+      lagVals = [];
+      let lagOk = true;
+      for (let d = 1; d <= lagDays; d++) {
+        const ld = new Date(r.date); ld.setDate(ld.getDate() - d);
+        const lr = dateMap[ld.toISOString().slice(0, 10)];
+        const lv = lr ? Number(target.getValue(lr)) : NaN;
+        if (!Number.isFinite(lv)) { lagOk = false; break; }
+        lagVals.push((lv - targetMean) / targetSd);
+      }
+      if (!lagOk) continue;
+    }
     const row = [];
     const medMap = {};
     (r.medications || []).forEach(m => { medMap[m.id] = m; });
@@ -127,6 +157,7 @@ function runAnalysis({ records, activeGroups, predictionTarget, useWeekdayRandom
       if (includeRhr && bioStats.rhr.count > 0) row.push(bio.rhr != null ? (bio.rhr - bioStats.rhr.mean) / bioStats.rhr.sd : 0);
       if (includeDeep && bioStats.deep.count > 0) row.push(bio.deepSleepPct != null ? (bio.deepSleepPct - bioStats.deep.mean) / bioStats.deep.sd : 0);
     }
+    if (lagVals) lagVals.forEach(v => row.push(v));
     X.push(row); Yarr.push(yVal); groups.push(new Date(r.date).getDay()); dates.push(r.date);
   }
 

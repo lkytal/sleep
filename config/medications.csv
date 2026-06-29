@@ -1,7 +1,7 @@
 id,name,default_time, dose
-melatonin,褪黑素,21:00, 0.2mg
+melatonin,褪黑素,21:00, 0.16mg
 magnesium,甘氨酸镁,22:30, 100mg
-magnesium-Threonate,苏糖酸镁,0:30, 66mg
-PS,PS,22:30, 20mg
+magnesium-Threonate,苏糖酸镁,23:00, 66mg
+PS,PS,01:30, 40mg
 Glycine,甘氨酸,00:30, 1000mg
-Theanine,茶氨酸,01:00, 100mg
+Theanine,茶氨酸,01:30, 60mg
